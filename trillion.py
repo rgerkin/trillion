@@ -196,6 +196,8 @@ def load_odorants_tests_results(all_components):
 def main():
     components = load_components()
     odorants,tests = load_odorants_tests_results(components)
+    
+    """
     n_iterations = 1000
     n_odors = 5 # Initial number of odors.  
     n_odorants = 25
@@ -236,8 +238,9 @@ def main():
         history.append((maxx,meen,empty))
         print "After iteration %d: %f, %f, %d" % (iteration,maxx,meen,empty)
     return history
+    """
 
 if __name__ == '__main__':
     history = main()
-    maxx,meen,empty = zip(*history)
+    #maxx,meen,empty = zip(*history)
     #plot(minn)
