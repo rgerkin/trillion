@@ -1,4 +1,5 @@
-from pylab import *
+import numpy as np
+import matplotlib.pyplot as plt
 from itertools import combinations
 from scipy.misc import factorial
 import random
@@ -90,7 +91,9 @@ class Odorant(object):
         if(self.N and components != self.N):
             pass #print "Odorant does not contain %d components." % self.N
         self.components = components if components else []
-        self.vector = array([i for i in range(self.C) if i in self.components])
+        self.vector = np.array([i for i in range(self.C) if i in self.components])
+
+    name = None # Name of odorant, built from a hash of component names.  
 
     C = 10 # Number of candidate molecules that can be selected from
           # to build the odorant.  
@@ -126,20 +129,52 @@ class Component(object):
         self.solvent = solvent
 
 class Test(object):
+    """A test class, corresponding to a triangle test with two odorants."""
     def __init__(self,test_uid,odorants,dilution,correct):
         self.id = test_uid
+        #assert len(odorants)==3 # There must be three stimuli.  
         self.odorants = odorants
+        #assert not any([x is None for x in self.pair]) # Exactly two identical.
         self.dilution = dilution
         self.correct = correct
 
     def add_odorant(self,odorant):
+        """Adds one odorant to this test."""
         self.odorants.append(odorant)
+
+    @property
+    def double(self):
+        """Returns the odorant present twice in this test."""
+        for odorant in self.odorants:
+            if self.odorants.count(odorant) == 2:
+                return odorant
+        return None
+
+    @property
+    def single(self):
+        """Returns the odorant present once in this test."""
+        for odorant in self.odorants:
+            if self.odorants.count(odorant) == 1:
+                return odorant
+        return None
+
+    @property
+    def pair(self):
+        """Returns the odorant pair in this test, with the odorant present
+        twice listed first."""
+        return (self.double,self.single)
 
 class Result(object):
     def __init__(self,test,subject_id,correct):
         self.test = test
         self.subject_id = subject_id
         self.correct = correct
+
+class Distance(object):
+    def __init__(self,odorant_i,odorant_j,distance):
+        self.odorant_i = odorant_i
+        self.odorant_j = odorant_j
+        self.distance = distance
 
 def load_components():
     components = []
@@ -164,6 +199,7 @@ def load_odorants_tests_results(all_components):
     f = open('Bushdid-tableS2.csv','r')
     reader = csv.reader(f)
     reader.next()
+    row_num = 0
     for row in reader:
         uid,n,r,percent,dilution,correct = row[:6]
         component_names = [x for x in row[6:36] if len(x)]
@@ -171,8 +207,8 @@ def load_odorants_tests_results(all_components):
                            '4-methylpent-3-en-2-one') for x in component_names]
         outcomes = row[36:62]  
         if uid.isdigit():
+            uid = int(uid)
             dilution = DILUTION[dilution]
-            #correct = CORRECT[correct]
             odorant_key = hash(tuple(component_names))
             if odorant_key not in odorants:
                 components = [component for component in all_components \
@@ -180,6 +216,9 @@ def load_odorants_tests_results(all_components):
                 if len(components) not in [1,10,20,30]:
                     print uid,[x for x in component_names if x not in [y.name for y in components]]
                 odorant = Odorant(components)
+                odorant.name = odorant_key
+            elif row_num % 3 == 0:
+                print "Repeat of this odorant: %d" % odorant_key
             odorants[odorant_key] = odorant    
             if uid not in tests:
                 tests[uid] = Test(uid,[],dilution,correct)
@@ -191,12 +230,83 @@ def load_odorants_tests_results(all_components):
             for i,outcome in enumerate(outcomes):
                 result = Result(test,i+1,CORRECT[outcome])
                 results.append(result)
+        row_num += 1
     return odorants,tests,results #.values(),tests.values()
+
+def odorant_distances(results,subject_id=None):
+    distances = {}
+    distance_n_subjects = {} 
+    for result in results:
+        if subject_id and result.subject_id != subject_id:
+            continue
+        pair = result.test.pair
+        if pair not in distances:
+            distances[pair] = 0
+            distance_n_subjects[pair] = 0
+        distances[pair] += 0.0 if result.correct else 1.0
+        distance_n_subjects[pair] += 1
+    for pair in distances.keys():
+        distances[pair] /= distance_n_subjects[pair]
+    return distances
+
+def mds(odorants,results):
+    distances = odorant_distances(results,subject_id=None)
+    n_odorants = len(odorants)
+    data = np.zeros((n_odorants,n_odorants),dtype='float64')
+    mask = np.ones((n_odorants,n_odorants))
+    for (double,single),distance in distances.items():
+        i = odorants.keys().index(double.name)
+        j = odorants.keys().index(single.name)
+        data[i][j] = distance
+        mask[i][j] = 0
+        data[j][i] = distance
+        mask[j][i] = 0
+    distance_matrix = np.ma.MaskedArray(data,mask)
+
+    from sklearn import manifold
+    from sklearn.metrics import euclidean_distances
+    seed = np.random.RandomState(seed=3)
+    mds = manifold.MDS(n_components=2, max_iter=3000, eps=1e-9, 
+                       random_state=seed, dissimilarity="precomputed", n_jobs=1)
+
+    pos = mds.fit_transform(distance_matrix)
+    
+    '''
+    nmds = manifold.MDS(n_components=2, metric=False, max_iter=3000, eps=1e-12,
+                    dissimilarity="precomputed", random_state=seed, n_jobs=1,
+                    n_init=1)
+    
+    npos = nmds.fit_transform(distance_matrix, init=pos)
+    '''
+
+    #fitted_distance_matrix = euclidean_distances(pos)
+    #original = distance_matrix.reshape(len(pos)**2)
+    #fitted = fitted_distance_matrix.reshape(len(pos)**2)
+    #plot(pos[:,0],pos[:,1],'.')
+
+    npos = pos
+    #return original,fitted
+    
+    from matplotlib.collections import LineCollection
+    plt.scatter(npos[:, 0], npos[:, 1], s=20, c='b')
+    segments = []
+    for (double,single),distance in distances.items():
+        i = odorants.keys().index(double.name)
+        j = odorants.keys().index(single.name)
+        segments.append(((npos[i,:]),(npos[j,:])))
+    print segments
+    lc = LineCollection(segments)
+    #lc.set_array(distance_matrix.flatten())
+    #lc.set_linewidths(0.5 * np.ones(len(segments)))
+    plt.gca().add_collection(lc)
+    plt.show()
 
 def main():
     components = load_components()
-    odorants,tests = load_odorants_tests_results(components)
-    
+    odorants,tests,results = load_odorants_tests_results(components)
+    result = mds(odorants,results)
+    return result
+
     """
     n_iterations = 1000
     n_odors = 5 # Initial number of odors.  
