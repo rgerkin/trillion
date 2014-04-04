@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
@@ -88,16 +89,17 @@ class Odorant(object):
     candidate molecules in the mixture."""
 
     def __init__(self, components=None):
-        if(self.N and components != self.N):
-            pass #print "Odorant does not contain %d components." % self.N
         self.components = components if components else []
-        self.vector = np.array([i for i in range(self.C) if i in self.components])
+        #self.vector = np.array([i in self.components for i in range(self.C)])
 
     name = None # Name of odorant, built from a hash of component names.  
 
-    C = 10 # Number of candidate molecules that can be selected from
-          # to build the odorant.  
-    N = 3 # Number of molecules that an odorant must contain.  
+    C = 128 # Number of components from which to choose.  
+
+    @property
+    def N(self):
+        """Number of components in this odorant."""
+        return len(self.components)
 
     def r(self,other):
         if len(self.components) == len(other.components):
@@ -106,16 +108,18 @@ class Odorant(object):
             return None
 
     def hamming(self, other):
-        diff = sum(abs(self.vector - other.vector))
+        x = set(self.components)
+        y = set(other.components)
+        diff = len(x)+len(y)-2*len(x.intersection(y))
         return diff
 
     def add_component(self, component):
         self.components.append(component)
-        self.vector[component] = 1
+        #self.vector[component] = 1
 
     def remove_component(self, component):
         self.components.remove(component)
-        self.vector[component] = 0
+        #self.vector[component] = 0
 
     def __str__(self):
         return u','.join([str(x) for x in self.components])
@@ -163,6 +167,14 @@ class Test(object):
         """Returns the odorant pair in this test, with the odorant present
         twice listed first."""
         return (self.double,self.single)
+
+    @property
+    def N(self):
+        return self.double.N
+
+    @property
+    def r(self):
+        return self.double.r(self.single)
 
 class Result(object):
     def __init__(self,test,subject_id,correct):
@@ -300,6 +312,55 @@ def mds(odorants,results):
     #lc.set_linewidths(0.5 * np.ones(len(segments)))
     plt.gca().add_collection(lc)
     plt.show()
+
+def ROC(results,N):
+    """Return a distribution of number of distinct components for 
+    correct trials (right) and incorrect trials (wrong)."""
+    right = []
+    wrong = []
+    for result in results:
+        if result.test.N == N:
+            r = result.test.r
+            if result.correct:
+                right.append(r)
+            else:
+                wrong.append(r)
+    right = np.array(right)
+    wrong = np.array(wrong)
+    return (right,wrong)
+
+def fit(results,components):
+    X = np.zeros((len(results),26+len(components)*2))
+    Y = np.zeros((len(results),1))
+    for i,result in enumerate(results):
+        Y[i] = result.correct
+        x = np.zeros(len(components))
+        test_components = result.test.double.components+result.test.single.components
+        for component in test_components:
+            try:
+                index = components.index(component)
+            except ValueError:
+                print "Couldn't find %s" % component
+                sys.exit(0)
+            else:
+                x[index] += 1
+        for j in range(len(components)):
+            X[i,26+2*j] = x[j]==1
+            X[i,26+2*j+1] = x[j]==2
+        X[i,result.subject_id] = 1             
+    from scikits.statsmodels.api import OLS
+    from sklearn import linear_model as lm
+    clf = lm.Lasso(0.001)#alpha = alpha)
+    results = clf.fit(X,Y)
+    for i,beta in enumerate(results.coef_):
+        result = round(1000*beta)
+        if abs(result) > 0.1:
+            print i,result
+    print Y.shape,X.shape
+    model = OLS(Y,X)
+    results = model.fit()
+    print results.summary()
+    return Y,X
 
 def main():
     components = load_components()
