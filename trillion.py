@@ -129,6 +129,31 @@ class Odorant(object):
         self.components.remove(component)
         #self.vector[component] = 0
 
+    @property
+    def descriptor_list(self):
+        descriptors = []
+        for component in self.components:
+            if component.descriptors is not None:
+                descriptors += component.descriptors
+        return list(set(descriptors)) # Remove duplicates.  
+
+    def descriptor_vector(self,all_descriptors):
+        vector = np.zeros(len(all_descriptors))
+        for component in self.components:
+            if component.descriptors is not None:
+                for descriptor in component.descriptors:
+                    index = all_descriptors.index(descriptor)
+                    vector[index] += 1
+        return vector
+
+    @property
+    def fraction_components_described(self):
+        n_described = 0.0
+        for component in self.components:
+            if component.descriptors is not None:
+                n_described += 1.0
+        return n_described / self.N
+
     def __str__(self):
         return u','.join([str(x) for x in self.components])
 
@@ -139,6 +164,11 @@ class Component(object):
         self.cas = cas
         self.percent = percent
         self.solvent = solvent
+        self.descriptors = None
+
+    def set_descriptors(self,cas_descriptors):
+        if self.cas in cas_descriptors:
+            self.descriptors = cas_descriptors[self.cas]
 
 class Test(object):
     """A test class, corresponding to a triangle test with two odorants."""
@@ -206,6 +236,28 @@ class Test(object):
         d = set(self.double.components)
         s = set(self.single.components)
         return list(s.symmetric_difference(d))
+
+    @property
+    def unique_descriptors(self):
+        s = self.single
+        d = self.double
+        unique = set(d.descriptor_list).symmetric_difference(set(s.descriptor_list))
+        return list(unique)
+
+    @property
+    def common_descriptors(self):
+        s = self.single
+        d = self.double
+        unique = set(d.descriptor_list).intersection(set(s.descriptor_list))
+        return list(unique)
+
+    def descriptors_correlation(self,all_descriptors):
+        s = self.single
+        d = self.double
+        a = all_descriptors
+        sv = np.array(s.descriptor_vector(a))
+        dv = np.array(d.descriptor_vector(a))
+        return np.corrcoef(sv,dv)[1][0]
 
 class Result(object):
     def __init__(self, test, subject_id, correct):
@@ -491,10 +543,100 @@ def fit3(results, tests, components):
     print "Classification Accuracy: %f" % metrics.accuracy_score(Y_test,Y_pred)
     return clf,X,Y
 
+def fit4(results,tests,components,all_descriptors):
+    tests = [value for key,value in tests.items() if value.N > 1]
+    X = np.zeros((len(tests),9+len(all_descriptors)))
+    Y = np.zeros((len(tests),1))
+    for test in tests:
+        test.n_results = 0
+    for result in results:
+        if result.test not in tests:
+            continue
+        i = tests.index(result.test)
+        test = tests[i]
+        Y[i,0] += result.correct
+        #Y[i,1] += not result.correct
+        X[i,0] = 1
+        X[i,1] = test.N == 20
+        X[i,2] = test.N == 30
+        X[i,3] = test.overlap(percent=True)/100.0
+        X[i,4] = len(test.unique_descriptors)
+        X[i,5] = len(test.unique_descriptors)/test.N
+        X[i,6] = test.descriptors_correlation(all_descriptors)
+        X[i,7] = len(test.common_descriptors)
+        X[i,8] = len(test.common_descriptors)/test.N
+        for descriptor in test.unique_descriptors:
+            index = all_descriptors.index(descriptor)
+            X[i,9+index] = 1
+        test.n_results += 1
+    for i,test in enumerate(tests):
+        Y[i] = (Y[i]+0.0)/test.n_results
+
+    # Delete columns with only zeroes.
+    X = np.delete(X,np.where(sum(X,0)==0)[0],axis=1)  
+
+    import statsmodels.api as sm
+    from sklearn import linear_model as lm
+    from sklearn.cross_validation import train_test_split
+    from sklearn import metrics
+    Y = np.squeeze(Y)
+
+    for col in range(1,X.shape[1]):
+        #pass
+        norm = np.linalg.norm(X[:,col])
+        #print col,norm
+        #X[:,col] /= norm
+
+    X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.3)
+    #clf = BernoulliNB()
+    #clf.fit(X_train,Y_train)
+    
+    for lasso in 10 ** np.arange(-6,-2,0.25):
+        clf = lm.Lasso(lasso)#alpha = alpha)
+        results = clf.fit(X_train,Y_train)
+        print "Lasso parameter: %f" % lasso
+        print "Out of sample R^2: %f" % np.corrcoef(Y_test,results.predict(X_test))[1][0]**2
+    
+    clf = lm.Lasso(0.001)#alpha = alpha)
+    results = clf.fit(X_train,Y_train)
+    for i,beta in enumerate(results.coef_):
+        result = round(1000*beta)
+        if abs(result) > 0.1:
+            print i,result
+
+    cols = np.where(np.array(results.coef_)==0.0)[0]
+    if cols[0] == 0:
+        cols = cols[1:]
+    #X = np.delete(X,cols,axis=1)  
+    
+    X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.5)
+    model = sm.OLS(Y_train,X_train)
+    results = model.fit()
+    print results.summary()
+
+    #Y_test = Y_train
+    #X_test = X_train
+    #ss_res = sum((Y_test-results.predict(X_test))**2)
+    #ss_tot = sum((Y_test-np.mean(Y_test))**2)
+    #print ss_res,ss_tot
+    #r2 = 1 - ss_res/ss_tot
+    #print 
+    print "Out of sample R^2: %f" % np.corrcoef(Y_test,results.predict(X_test))[1][0]**2
+    
+    return results,X,Y
+
 def main():
     components = load_components()
+    import sigma_ff
+    cas_descriptors = sigma_ff.ff
+    for component in components:
+        component.set_descriptors(cas_descriptors)
+    all_descriptors = []
+    for CAS,descriptors in cas_descriptors.items():
+        all_descriptors += descriptors
+    all_descriptors = list(set(all_descriptors)) # Remove duplicates.  
     odorants,tests,results = load_odorants_tests_results(components)
-    return fit3(results,tests,components)
+    return fit4(results,tests,components,all_descriptors)
     #result = mds(odorants,results)
     #return result
 
