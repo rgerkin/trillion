@@ -1,3 +1,5 @@
+from __future__ import division
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -107,6 +109,12 @@ class Odorant(object):
         else:
             return None
 
+    def overlap(self,other,percent=False):
+        overlap = self.N - self.r(other)
+        if percent:
+            overlap = overlap*100.0/self.N
+        return overlap
+
     def hamming(self, other):
         x = set(self.components)
         y = set(other.components)
@@ -176,14 +184,37 @@ class Test(object):
     def r(self):
         return self.double.r(self.single)
 
+    def overlap(self, percent=False):
+        return self.double.overlap(self.single,percent=percent)
+
+    @property
+    def N(self):
+        return self.double.N
+
+    @property
+    def r(self):
+        return self.double.r(self.single)
+
+    @property
+    def common_components(self):
+        d = set(self.double.components)
+        s = set(self.single.components)
+        return list(s.intersection(d))
+
+    @property
+    def unique_components(self):
+        d = set(self.double.components)
+        s = set(self.single.components)
+        return list(s.symmetric_difference(d))
+
 class Result(object):
-    def __init__(self,test,subject_id,correct):
+    def __init__(self, test, subject_id, correct):
         self.test = test
         self.subject_id = subject_id
         self.correct = correct
 
 class Distance(object):
-    def __init__(self,odorant_i,odorant_j,distance):
+    def __init__(self, odorant_i, odorant_j, distance):
         self.odorant_i = odorant_i
         self.odorant_j = odorant_j
         self.distance = distance
@@ -313,7 +344,7 @@ def mds(odorants,results):
     plt.gca().add_collection(lc)
     plt.show()
 
-def ROC(results,N):
+def ROC(results, N):
     """Return a distribution of number of distinct components for 
     correct trials (right) and incorrect trials (wrong)."""
     right = []
@@ -329,7 +360,8 @@ def ROC(results,N):
     wrong = np.array(wrong)
     return (right,wrong)
 
-def fit(results,components):
+def fit(results, components):
+    """Basic OLS model to predict test results."""
     X = np.zeros((len(results),26+len(components)*2))
     Y = np.zeros((len(results),1))
     for i,result in enumerate(results):
@@ -362,11 +394,109 @@ def fit(results,components):
     print results.summary()
     return Y,X
 
+def fit2(results, tests, components):
+    """Regularized model to predict averaged test results."""
+    tests = [value for key,value in tests.items() if value.N > 1]
+    X = np.zeros((len(tests),4+128+128))
+    Y = np.zeros((len(tests),1))
+    for test in tests:
+        test.n_results = 0
+    for result in results:
+        if result.test not in tests:
+            continue
+        i = tests.index(result.test)
+        test = tests[i]
+        Y[i,0] += result.correct
+        #Y[i,1] += not result.correct
+        X[i,0] = 1
+        X[i,1] = test.N == 20
+        X[i,2] = test.N == 30
+        X[i,3] = test.overlap(percent=True)/100.0
+        for j,component in enumerate(components):
+            if component in test.unique_components:
+                X[i,j+4] += 1
+            if component in test.common_components:
+                X[i,j+4+128] += 1
+        test.n_results += 1
+    for i,test in enumerate(tests):
+        Y[i] = (Y[i]+0.0)/test.n_results
+    import statsmodels.api as sm
+    #model = sm.GLM(Y,X,family=sm.families.Binomial())
+    #results = model.fit()
+    #print results.summary()
+    '''
+    from sklearn.linear_model import Lasso
+    for alpha in 10.0 ** np.arange(-3,0,0.1):
+        clf_l1_LR = Lasso(alpha=alpha)
+        clf_l1_LR.fit(X, Y)
+        coef_l1_LR = clf_l1_LR.coef_.ravel()
+        coef_l1_LR[0:4] = 1
+        X_sparse = np.delete(X,np.where(coef_l1_LR == 0.0)[0],1)
+        if len(X_sparse):
+            model = sm.OLS(Y,X_sparse)
+            results = model.fit()
+            r2 = 1-results.ssr/results.centered_tss
+            adj_r2 = 1 - (results.nobs-1)/results.df_resid * (1-r2) 
+            print 'Alpha = %f; Components = %d; R^2 = %f; Adj. R^2 = %f; AIC = %f; BIC = %f' % \
+               (alpha,X_sparse.shape[1]-4,r2,adj_r2,
+                results.aic,results.bic)
+            #print results.summary()
+    '''
+    X_overlap_only = X[:,0:4]
+    model = sm.OLS(Y,X_overlap_only)
+    results = model.fit()
+    print results.summary()
+    X = []
+    Y = []
+    for i,test in enumerate(tests):
+        for component in test.common_components:
+            X.append(components.index(component))
+        Y += [results.resid[i] for i in range(len(test.common_components))]
+    '''
+    Y_mean = [mean(array(Y)[where(array(X)==i)[0]]) for i in range(128)]
+    indices = range(len(components))
+    indices.sort(key=lambda x:Y_mean[x])
+    X_sorted = [indices.index(i) for i in X]
+    X_mean = [indices.index(i) for i in range(len(components))]
+    scatter(X_sorted,Y,s=5)
+    scatter(X_mean,Y_mean,s=50,c='r')
+    '''
+    return results,X,Y
+
+def fit3(results, tests, components):
+    """Naive bayes prediction of test results."""
+    results = [result for result in results if result.test.N > 1]
+    n_subjects = 26
+    n_components = len(components)
+    X = np.zeros((len(results),3+n_subjects+len(components)*2))
+    Y = np.zeros((len(results),1))
+    for i,result in enumerate(results):
+        Y[i] = result.correct
+        X[i,0] = result.test.N == 10
+        X[i,1] = result.test.N == 20
+        X[i,2] = result.test.N == 30
+        X[i,2+result.subject_id] = 1
+        for component in result.test.unique_components:
+            X[i,3+n_subjects+components.index(component)]=1
+        for component in result.test.common_components:
+            X[i,3+n_subjects+len(components)+components.index(component)]=1
+    from sklearn.naive_bayes import BernoulliNB
+    from sklearn.cross_validation import train_test_split
+    from sklearn import metrics
+    Y = np.squeeze(Y)
+    X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.3)
+    clf = BernoulliNB()
+    clf.fit(X_train,Y_train)
+    Y_pred = clf.predict(X_test)
+    print "Classification Accuracy: %f" % metrics.accuracy_score(Y_test,Y_pred)
+    return clf,X,Y
+
 def main():
     components = load_components()
     odorants,tests,results = load_odorants_tests_results(components)
-    result = mds(odorants,results)
-    return result
+    return fit3(results,tests,components)
+    #result = mds(odorants,results)
+    #return result
 
     """
     n_iterations = 1000
@@ -412,6 +542,6 @@ def main():
     """
 
 if __name__ == '__main__':
-    history = main()
+    results,X,Y = main()
     #maxx,meen,empty = zip(*history)
     #plot(minn)
