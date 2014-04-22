@@ -7,7 +7,7 @@ with open('sigma_ff_catalog.txt','r') as f:
      text = f.read()
      lines = text.split('\n')
 
-ff = {}
+data = {}
 organoleptic = 0
 for line_num,line in enumerate(lines):
     if len(line):
@@ -26,16 +26,16 @@ for line_num,line in enumerate(lines):
                         value = value + ' '
                     value += lines[line_num+1]
                 value = [i.strip() for i in value.split(';') if len(i.strip())]
-                ff[key] = value
+                data[key] = value
                 organoleptic = 0
             except:
                 pass
 
-print "%d compounds described." % len(ff)
+print "%d compounds described." % len(data)
 
 descriptors = []
-for x in ff.values():
+for x in data.values():
      descriptors += x
-descriptors = set(descriptors) # Remove duplicates.  
+descriptors = list(set(descriptors)) # Remove duplicates.  
 print "%d descriptors used." % len(descriptors)
 

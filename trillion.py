@@ -5,8 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
 from scipy.misc import factorial
+from scipy.stats import binom
 import random
 import csv
+from datetime import datetime
+from collections import OrderedDict
 
 DILUTION = {'1/4':0.25, '1/2':0.5, 'not diluted':1.0}
 CORRECT = {'right':True, 'wrong':False}
@@ -41,6 +44,7 @@ def ncube(n,k,d):
     print s-1
 '''
 
+'''
 class Odor(object):
     """An odor, defined as that which cannot be discriminated from itself, 
     but can be discriminated from all other odors.  May contain 1 or 
@@ -85,6 +89,7 @@ class Odor(object):
 
     def __str__(self):
         return u';'.join([str(x) for x in self.odorants])
+'''
     
 class Odorant(object):
     """A mixture of molecules, defined by the presence of absence of the 
@@ -129,30 +134,61 @@ class Odorant(object):
         self.components.remove(component)
         #self.vector[component] = 0
 
-    @property
-    def descriptor_list(self):
+    def descriptor_list(self,source):
         descriptors = []
         for component in self.components:
-            if component.descriptors is not None:
-                descriptors += component.descriptors
+            if source in component.descriptors:
+                desc = component.descriptors[source]
+                if type(desc) == list:
+                    descriptors += desc
+                if type(desc) == dict:
+                    descriptors += [key for key,value in desc.items() if value > 0.0]
         return list(set(descriptors)) # Remove duplicates.  
 
-    def descriptor_vector(self,all_descriptors):
+    def descriptor_vector(self,source,all_descriptors):
+        #print "Getting %s descriptor vector" % source
+        #tic = datetime.now()
         vector = np.zeros(len(all_descriptors))
         for component in self.components:
-            if component.descriptors is not None:
-                for descriptor in component.descriptors:
-                    index = all_descriptors.index(descriptor)
-                    vector[index] += 1
+            if source in component.descriptors:
+                desc = component.descriptors[source]
+                if type(desc) == list:
+                    for descriptor in desc:
+                        index = all_descriptors.index(descriptor)
+                        assert index >= 0
+                        vector[index] += 1
+                if type(desc) == dict:
+                    this_vector = np.array([value for key,value in sorted(desc.items())])
+                    vector += this_vector
+        #print "%s" % (datetime.now()-tic)
         return vector
 
-    @property
-    def fraction_components_described(self):
-        n_described = 0.0
+    def descriptor_vector2(self,all_descriptors):
+        n_descriptors_dravnieks = len(all_descriptors['dravnieks'])
+        n_descriptors_sigma_ff = len(all_descriptors['sigma_ff'])
+        vector = np.zeros(n_descriptors_dravnieks+n_descriptors_sigma_ff)
         for component in self.components:
-            if component.descriptors is not None:
-                n_described += 1.0
-        return n_described / self.N
+            if 'dravnieks' in component.descriptors:
+                desc = component.descriptors['dravnieks']
+                this_vector = np.array([value for key,value in sorted(desc.items())])
+                vector[0:n_descriptors_dravnieks] += this_vector
+            elif 'sigma_ff' in component.descriptors:
+                desc = component.descriptors['sigma_ff']
+                for descriptor in desc:
+                    index = all_descriptors['sigma_ff'].index(descriptor)
+                    assert index >= 0
+                    vector[n_descriptors_dravnieks+index] += 1
+        return vector
+    
+    def described_components(self,source):
+        return [component for component in self.components \
+                if source in component.descriptors]
+
+    def n_described_components(self,source):
+        return len(self.described_components(source))
+
+    def fraction_components_described(self,source):
+        return self.n_described_components(source) / self.N
 
     def __str__(self):
         return u','.join([str(x) for x in self.components])
@@ -164,11 +200,14 @@ class Component(object):
         self.cas = cas
         self.percent = percent
         self.solvent = solvent
-        self.descriptors = None
+        self.descriptors = {}
 
-    def set_descriptors(self,cas_descriptors):
+    def set_descriptors(self,source,cas_descriptors):
+        assert type(source)==str and len(source)
         if self.cas in cas_descriptors:
-            self.descriptors = cas_descriptors[self.cas]
+            self.descriptors[source] = cas_descriptors[self.cas]
+            # For sigma_ff this will be a list.  
+            # For dravnieks this will be a dict.  
 
 class Test(object):
     """A test class, corresponding to a triangle test with two odorants."""
@@ -237,27 +276,32 @@ class Test(object):
         s = set(self.single.components)
         return list(s.symmetric_difference(d))
 
-    @property
-    def unique_descriptors(self):
-        s = self.single
-        d = self.double
-        unique = set(d.descriptor_list).symmetric_difference(set(s.descriptor_list))
+    def unique_descriptors(self,source):
+        sl = self.single.descriptor_list(source)
+        dl = self.double.descriptor_list(source)
+        unique = set(dl).symmetric_difference(set(sl))
         return list(unique)
 
-    @property
-    def common_descriptors(self):
-        s = self.single
-        d = self.double
-        unique = set(d.descriptor_list).intersection(set(s.descriptor_list))
+    def common_descriptors(self,source):
+        sl = self.single.descriptor_list(source)
+        dl = self.double.descriptor_list(source)
+        unique = set(dl).intersection(set(sl))
         return list(unique)
 
-    def descriptors_correlation(self,all_descriptors):
-        s = self.single
-        d = self.double
-        a = all_descriptors
-        sv = np.array(s.descriptor_vector(a))
-        dv = np.array(d.descriptor_vector(a))
+    def descriptors_correlation(self,source,all_descriptors):
+        sv = self.single.descriptor_vector(source,all_descriptors)
+        dv = self.double.descriptor_vector(source,all_descriptors)
         return np.corrcoef(sv,dv)[1][0]
+
+    def descriptors_correlation2(self,all_descriptors):
+        sv = self.single.descriptor_vector2(all_descriptors)
+        dv = self.double.descriptor_vector2(all_descriptors)
+        return np.corrcoef(sv,dv)[1][0]
+
+    def n_undescribed(self,source):
+        d = self.double.n_described_components(source)
+        s = self.single.n_described_components(source)
+        return (self.N-d,self.N-s)
 
 class Result(object):
     def __init__(self, test, subject_id, correct):
@@ -412,6 +456,85 @@ def ROC(results, N):
     wrong = np.array(wrong)
     return (right,wrong)
 
+def correct_matrix(results,N,overlap):
+    results = [r for r in results if r.test.N==N and r.test.overlap()==overlap]
+    subjects = [r.subject_id for r in results]
+    subjects = list(set(subjects))
+    tests = [r.test for r in results]
+    tests = list(set(tests))
+    correct = np.zeros((len(subjects),len(tests)))
+    correct -= 1 # Set to make sure every point gets set to 0 or 1 later.  
+    for result in results:
+        i = subjects.index(result.subject_id)
+        j = tests.index(result.test)
+        correct[i,j] = result.correct
+    return correct
+
+def fraction_discriminating(results,N,overlap,alpha=None,bonferroni=False):
+    correct = correct_matrix(results,N,overlap)
+    fract = np.mean(correct,0)
+    if alpha is not None:
+        n_subjects = correct.shape[0]
+        fract = binom.cdf(fract*n_subjects,n_subjects,1.0/3)
+        if bonferroni:
+            alpha = alpha/len(fract)
+        fract = fract > (1.0-alpha/2)
+    return fract
+
+def fraction_discriminated(results,N,overlap,alpha=None,bonferroni=False):
+    correct = correct_matrix(results,N,overlap)
+    fract = np.mean(correct,1)
+    if alpha is not None:
+        n_mixtures = correct.shape[1]
+        fract = binom.cdf(fract*n_mixtures,n_mixtures,1.0/3)
+        if bonferroni:
+            alpha = alpha/len(fract)
+        fract = fract > (1.0-alpha/2)
+    return fract
+
+def fig3x(results,x='a',alpha=0.05,bonferroni=False):
+    if x == 'a':
+        func = fraction_discriminated
+    elif x == 'b':
+        func = fraction_discriminating
+    tens_overlap = 100.0*np.array((9,6,3,0))/10.0
+    twenties_overlap = 100.0*np.array([19,15,10,5,0])/20.0
+    thirties_overlap = 100.0*np.array([29,20,10,0])/30.0
+    
+    def do(N,x,results):
+        y = np.zeros(len(x))
+        for i,overlap in enumerate(x):
+            f = func(results,N,int(overlap*N/100.0),alpha=alpha,bonferroni=bonferroni)
+            y[i] = (sum(f)+0.0)/len(f)
+        return y*100.0
+
+    tens = do(10,tens_overlap,results)
+    twenties = do(20,twenties_overlap,results)
+    thirties = do(30,thirties_overlap,results)
+
+    plt.scatter(tens_overlap,tens,s=20,c='b')
+    plt.scatter(twenties_overlap,twenties,s=20,c='r')
+    plt.scatter(thirties_overlap,thirties,s=20,c='g')
+    plt.xlim(100,-1)
+    plt.ylim(0,100)
+    overlap = np.concatenate((tens_overlap,twenties_overlap,thirties_overlap))
+    percent_disc = np.concatenate((tens,twenties,thirties))
+
+    A = np.array([ np.ones(len(overlap)), overlap])
+    w = np.linalg.lstsq(A.T,percent_disc)[0] # obtaining the parameters
+
+    # plotting the line
+    xi = np.arange(0,100)
+    line = w[0]+w[1]*xi # regression line
+    plt.plot(xi,line,'k-')
+    plt.xlabel('% mixture overlap')
+    if x == 'a':
+        plt.ylabel('% subjects that can discriminate')
+    elif x == 'b':
+        plt.ylabel('% mixtures that are discriminable')
+    print '50%% discrimination at %.3g%% overlap for alpha = %g' \
+        % ((50.0 - w[0])/w[1],alpha)
+
 def fit(results, components):
     """Basic OLS model to predict test results."""
     X = np.zeros((len(results),26+len(components)*2))
@@ -515,59 +638,90 @@ def fit2(results, tests, components):
     '''
     return results,X,Y
 
-def fit3(results, tests, components):
+def fit3(results, tests, components, all_descriptors):
     """Naive bayes prediction of test results."""
     results = [result for result in results if result.test.N > 1]
     n_subjects = 26
+    n_descriptors_sigma_ff = len(all_descriptors['sigma_ff'])
+    n_descriptors_dravnieks = len(all_descriptors['dravnieks'])
+    n_descriptors = n_descriptors_sigma_ff + n_descriptors_dravnieks
     n_components = len(components)
-    X = np.zeros((len(results),3+n_subjects+len(components)*2))
+    X = np.zeros((len(results),6+n_subjects))#+len(components)*2))
     Y = np.zeros((len(results),1))
+    n_results = len(results)
     for i,result in enumerate(results):
+        prog(i,n_results)
+        test = result.test
         Y[i] = result.correct
-        X[i,0] = result.test.N == 10
-        X[i,1] = result.test.N == 20
-        X[i,2] = result.test.N == 30
-        X[i,2+result.subject_id] = 1
-        for component in result.test.unique_components:
-            X[i,3+n_subjects+components.index(component)]=1
-        for component in result.test.common_components:
-            X[i,3+n_subjects+len(components)+components.index(component)]=1
+        X[i,0] = test.N == 10
+        X[i,1] = test.N == 20
+        X[i,2] = test.N == 30
+        #X[i,3] = test.overlap(percent=True)/100.0
+        #X[i,4] = (test.overlap(percent=True)/100.0)**2
+        #X[i,5] = (test.overlap(percent=True)/100.0)**3
+        X[i,3] = test.descriptors_correlation2(all_descriptors)**2
+        X[i,4] = test.descriptors_correlation2(all_descriptors)**4
+        X[i,5] = test.descriptors_correlation2(all_descriptors)**6
+        X[i,5+result.subject_id] = 1
+        #for component in result.test.unique_components:
+        #    X[i,3+n_subjects+components.index(component)]=1
+        #for component in result.test.common_components:
+        #    X[i,3+n_subjects+len(components)+components.index(component)]=1
     from sklearn.naive_bayes import BernoulliNB
     from sklearn.cross_validation import train_test_split
     from sklearn import metrics
     Y = np.squeeze(Y)
-    X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.3)
     clf = BernoulliNB()
-    clf.fit(X_train,Y_train)
-    Y_pred = clf.predict(X_test)
-    print "Classification Accuracy: %f" % metrics.accuracy_score(Y_test,Y_pred)
+    scores = []
+    for i in range(25):
+        X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.3)
+        clf.fit(X_train,Y_train)
+        Y_pred = clf.predict(X_test)
+        scores.append(metrics.accuracy_score(Y_test,Y_pred))
+    print "\nClassification Accuracy: %f" % np.mean(np.array(scores))
     return clf,X,Y
 
 def fit4(results,tests,components,all_descriptors):
     tests = [value for key,value in tests.items() if value.N > 1]
-    X = np.zeros((len(tests),9+len(all_descriptors)))
+    #sources = ['sigma_ff','dravnieks']
+    n_descriptors_sigma_ff = len(all_descriptors['sigma_ff'])
+    n_descriptors_dravnieks = len(all_descriptors['dravnieks'])
+    n_descriptors = n_descriptors_sigma_ff + n_descriptors_dravnieks
+    X = np.zeros((len(tests),9))#+len(sources)*1))
     Y = np.zeros((len(tests),1))
     for test in tests:
         test.n_results = 0
-    for result in results:
+    n_results = len(results)
+    for n_result,result in enumerate(results):
+        prog(n_result,n_results)
         if result.test not in tests:
             continue
         i = tests.index(result.test)
         test = tests[i]
+        #print test.id,test.N,test.n_undescribed('dravnieks')
         Y[i,0] += result.correct
         #Y[i,1] += not result.correct
         X[i,0] = 1
         X[i,1] = test.N == 20
         X[i,2] = test.N == 30
         X[i,3] = test.overlap(percent=True)/100.0
-        X[i,4] = len(test.unique_descriptors)
-        X[i,5] = len(test.unique_descriptors)/test.N
-        X[i,6] = test.descriptors_correlation(all_descriptors)
-        X[i,7] = len(test.common_descriptors)
-        X[i,8] = len(test.common_descriptors)/test.N
-        for descriptor in test.unique_descriptors:
-            index = all_descriptors.index(descriptor)
-            X[i,9+index] = 1
+        X[i,4] = (test.overlap(percent=True)/100.0)**2
+        X[i,5] = (test.overlap(percent=True)/100.0)**3
+        X[i,6] = test.descriptors_correlation2(all_descriptors)**2
+        X[i,7] = test.descriptors_correlation2(all_descriptors)**4
+        X[i,8] = test.descriptors_correlation2(all_descriptors)**6
+        #for j,source in enumerate(sources):
+        #    offset = 2*j
+            #X[i,4+j] = len(test.unique_descriptors(source))
+            #X[i,5+j] = len(test.unique_descriptors(source))/test.N
+            #X[i,4+j] = test.descriptors_correlation(source,all_descriptors[source])**4
+            #if X[i,4+j] == 1.0:
+            #    print result.test.id
+            #X[i,7+j] = len(test.common_descriptors(source))
+            #X[i,8+j] = len(test.common_descriptors(source))/test.N
+        #for descriptor in test.unique_descriptors:
+        #    index = all_descriptors.index(descriptor)
+        #    X[i,9+index] = 1
         test.n_results += 1
     for i,test in enumerate(tests):
         Y[i] = (Y[i]+0.0)/test.n_results
@@ -587,6 +741,10 @@ def fit4(results,tests,components,all_descriptors):
         #print col,norm
         #X[:,col] /= norm
 
+    model = sm.OLS(Y,X)
+    results = model.fit()
+    print results.summary()
+
     X_train,X_test,Y_train,Y_test = train_test_split(X,Y,test_size=0.3)
     #clf = BernoulliNB()
     #clf.fit(X_train,Y_train)
@@ -597,7 +755,7 @@ def fit4(results,tests,components,all_descriptors):
         print "Lasso parameter: %f" % lasso
         print "Out of sample R^2: %f" % np.corrcoef(Y_test,results.predict(X_test))[1][0]**2
     
-    clf = lm.Lasso(0.001)#alpha = alpha)
+    clf = lm.Lasso(1)#alpha = alpha)
     results = clf.fit(X_train,Y_train)
     for i,beta in enumerate(results.coef_):
         result = round(1000*beta)
@@ -625,18 +783,49 @@ def fit4(results,tests,components,all_descriptors):
     
     return results,X,Y
 
+def loess(x,y,frac=0.2,it=None,scatter=True):
+    from statsmodels.nonparametric.smoothers_lowess import lowess 
+    y = np.array(y)
+    x = np.array(x)
+    y = y[x.argsort()] # Sort y according to order of x.  
+    x.sort() # Sort x in place.  
+    if it is not None: # Helps if you are getting NaN's in the output.  
+        d = lowess(y,x,frac=frac,it=it)
+    else:
+        d = lowess(y,x,frac=frac)
+    return d
+    #if scatter:
+    #    plot(x,y,'.',x,d[:,1],'-')
+    #else:
+    #    plot(x,d[:,1],'-')
+
+def tic():
+    global T
+    T = datetime.now()
+
+def toc():
+    global T
+    print '%s' % (datetime.now() - T)
+
+def prog(num,denom):
+    fract = float(num)/denom
+    hyphens = int(round(50*fract))
+    spaces = int(round(50*(1-fract)))
+    sys.stdout.write('\r%.2f%% [%s%s]' % (100*fract,'-'*hyphens,' '*spaces))
+    sys.stdout.flush()        
+
 def main():
     components = load_components()
-    import sigma_ff
-    cas_descriptors = sigma_ff.ff
+    import sigma_ff,dravnieks
+    sigma_ff_descriptors = sigma_ff.data
+    dravnieks_descriptors = dravnieks.data
     for component in components:
-        component.set_descriptors(cas_descriptors)
-    all_descriptors = []
-    for CAS,descriptors in cas_descriptors.items():
-        all_descriptors += descriptors
-    all_descriptors = list(set(all_descriptors)) # Remove duplicates.  
+        component.set_descriptors("sigma_ff",sigma_ff_descriptors)
+        component.set_descriptors("dravnieks",dravnieks_descriptors)
+    all_descriptors = {'sigma_ff':sigma_ff.descriptors,
+                       'dravnieks':dravnieks.descriptors}
     odorants,tests,results = load_odorants_tests_results(components)
-    return fit4(results,tests,components,all_descriptors)
+    return fit3(results,tests,components,all_descriptors)
     #result = mds(odorants,results)
     #return result
 
