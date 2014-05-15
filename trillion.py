@@ -18,7 +18,64 @@ def list_combos(n,k):
     return list(combinations(range(n),k))
 
 def get_n_combos(n,k):
-    return factorial(n)/(factorial(k)*factorial(n-k))
+    result = None
+    try:
+        result = (factorial(n)/(factorial(k))/factorial(n-k))
+    except:
+        pass
+    if not result or result == np.inf or result != result:
+        x = stirling(n) - stirling(k) - stirling(n-k)
+        result = np.exp(x) 
+    return result
+
+def stirling(n):
+    return n*np.log(n) - n + 0.5*np.log(2*np.pi*n)
+
+def sphere(N,C,R):
+    """
+    Formula for sphere from Bushdid supplemental material.
+    N = Number of components in a mixture.  
+    C = Number of components to choose from.  
+    R = Number of differing components.  
+    """
+    if R == 0:
+        result = 1
+    else:
+        result = get_n_combos(N,R)*get_n_combos(C-N,R)
+    return result
+
+def ball(N,C,R):
+    """Formula for ball from Bushdid supplemental material.
+    N = Number of components in a mixture.  
+    C = Number of components to choose from.  
+    R = Maximum number of differing components.  
+    """
+    result = 0
+    for r in range(0,R+1):
+        result += sphere(N,C,r)
+    return result
+
+def disc(N,C,d):
+    """Formula for number of discriminable odors from Bushdid supplemental material.
+    N = Number of components in a mixture.  
+    C = Number of components to choose from.  
+    d = Discriminability limen.  
+    """
+    low = get_n_combos(C,N) / ball(N,C,int(np.floor(d/2)))
+    high = get_n_combos(C,N) / ball(N,C,int(np.ceil(d/2)))
+    result = low+(high-low)*(d/2-np.floor(d/2)) # Interpolate.  
+    return result
+
+def fdr(alpha,p_list):
+    """Controls for false discovery rate using the Benjamin and Hochberg procedure."""
+    m = len(p_list)
+    p_list_sorted = sorted(p_list)
+    reject = [False for p in p_list]
+    for k,p in enumerate(p_list):
+        print p,k*alpha/m
+        if p <= k*alpha/m:
+            reject[p_list.index(p)] = True
+    return reject
 
 '''
 def ncube(n,k,d):
@@ -470,33 +527,30 @@ def correct_matrix(results,N,overlap):
         correct[i,j] = result.correct
     return correct
 
-def fraction_discriminating(results,N,overlap,alpha=None,bonferroni=False):
+def fraction_disc(results,N,overlap,fig,alpha=None,multiple_correction=False,n_replicates=None):
+    assert fig in ['a','b']
     correct = correct_matrix(results,N,overlap)
-    fract = np.mean(correct,0)
+    if fig == 'a':
+        dim = 1
+    elif fig == 'b':
+        dim = 0
+    fract_correct = np.mean(correct,dim)
     if alpha is not None:
-        n_subjects = correct.shape[0]
-        fract = binom.cdf(fract*n_subjects,n_subjects,1.0/3)
-        if bonferroni:
-            alpha = alpha/len(fract)
-        fract = fract > (1.0-alpha/2)
-    return fract
+        if not n_replicates:
+            n_replicates = correct.shape[dim] # n_subjects
+        ps = 1.0 - binom.cdf(fract_correct*n_replicates,n_replicates,1.0/3)
+        if multiple_correction == 'bonferroni':
+            alpha = alpha/len(ps)
+        if multiple_correction == 'fdr':
+            #print 'Raw: '+str(sorted(ps))
+            ps = np.array([p*len(ps)/(k+1) for k,p in enumerate(sorted(ps))])
+            #print 'FDR: '+str(ps)
+        fract_sig = ps < alpha/2
+        return fract_sig
+    else:
+        return fract_correct
 
-def fraction_discriminated(results,N,overlap,alpha=None,bonferroni=False):
-    correct = correct_matrix(results,N,overlap)
-    fract = np.mean(correct,1)
-    if alpha is not None:
-        n_mixtures = correct.shape[1]
-        fract = binom.cdf(fract*n_mixtures,n_mixtures,1.0/3)
-        if bonferroni:
-            alpha = alpha/len(fract)
-        fract = fract > (1.0-alpha/2)
-    return fract
-
-def fig3x(results,x='a',alpha=0.05,bonferroni=False):
-    if x == 'a':
-        func = fraction_discriminated
-    elif x == 'b':
-        func = fraction_discriminating
+def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None,plot=True):
     tens_overlap = 100.0*np.array((9,6,3,0))/10.0
     twenties_overlap = 100.0*np.array([19,15,10,5,0])/20.0
     thirties_overlap = 100.0*np.array([29,20,10,0])/30.0
@@ -504,36 +558,161 @@ def fig3x(results,x='a',alpha=0.05,bonferroni=False):
     def do(N,x,results):
         y = np.zeros(len(x))
         for i,overlap in enumerate(x):
-            f = func(results,N,int(overlap*N/100.0),alpha=alpha,bonferroni=bonferroni)
-            y[i] = (sum(f)+0.0)/len(f)
+            f = fraction_disc(results,N,int(overlap*N/100.0),fig,alpha=alpha,multiple_correction=multiple_correction,n_replicates=n_replicates)
+            y[i] = np.mean(f)
         return y*100.0
 
     tens = do(10,tens_overlap,results)
     twenties = do(20,twenties_overlap,results)
     thirties = do(30,thirties_overlap,results)
 
-    plt.scatter(tens_overlap,tens,s=20,c='b')
-    plt.scatter(twenties_overlap,twenties,s=20,c='r')
-    plt.scatter(thirties_overlap,thirties,s=20,c='g')
-    plt.xlim(100,-1)
-    plt.ylim(0,100)
+    if plot:
+        plt.scatter(tens_overlap,tens,s=20,c='b')
+        plt.scatter(twenties_overlap,twenties,s=20,c='r')
+        plt.scatter(thirties_overlap,thirties,s=20,c='g')
+        plt.xlim(100,-1)
+        plt.ylim(0,100)
     overlap = np.concatenate((tens_overlap,twenties_overlap,thirties_overlap))
     percent_disc = np.concatenate((tens,twenties,thirties))
 
-    A = np.array([ np.ones(len(overlap)), overlap])
+    A = np.array([np.ones(len(overlap)), overlap])
     w = np.linalg.lstsq(A.T,percent_disc)[0] # obtaining the parameters
 
     # plotting the line
     xi = np.arange(0,100)
     line = w[0]+w[1]*xi # regression line
-    plt.plot(xi,line,'k-')
-    plt.xlabel('% mixture overlap')
-    if x == 'a':
-        plt.ylabel('% subjects that can discriminate')
-    elif x == 'b':
-        plt.ylabel('% mixtures that are discriminable')
+    if plot:
+        plt.plot(xi,line,'k-')
+        plt.xlabel('% mixture overlap')
+        if fig == 'a':
+            plt.ylabel('% subjects that can discriminate')
+        elif fig == 'b':
+            plt.ylabel('% mixtures that are discriminable')
+    overlap = (50.0 - w[0])/w[1]
     print '50%% discrimination at %.3g%% overlap for alpha = %g' \
-        % ((50.0 - w[0])/w[1],alpha)
+        % (overlap,alpha)
+    return overlap
+
+def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
+    overlaps = []
+    for alpha in alphas:
+        overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction=multiple_correction,n_replicates=n_replicates,plot=False)
+        overlaps.append(np.max([0,overlap]))
+    if multiple_correction == 'bonferroni':
+        color ='r'
+    elif multiple_correction == 'fdr':
+        color = 'g'
+    elif not multiple_correction:
+        color ='b'
+    plt.scatter(alphas,overlaps,s=20,c=color)
+    plt.xlim(0.1,np.min(alphas)*0.5)
+    plt.ylim(-1,70)
+    plt.xscale('log')
+    plt.xlabel('Significance criterion alpha')
+    plt.ylabel('%% overlap for 50% discrimination')
+
+def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False):
+    N = 20
+    n_odors = []
+    for alpha in alphas:
+        overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction=multiple_correction,plot=False)
+        n_odors.append(float(disc(N,128,N*(100-overlap)/100)))
+    if multiple_correction == 'bonferroni':
+        color ='g'
+    elif multiple_correction == 'fdr':
+        color = 'r'
+    elif not multiple_correction:
+        color ='b'
+    
+    plt.scatter(alphas,n_odors,s=20,c=color)
+    plt.xlim(0.1,np.min(alphas)*0.5)
+    plt.ylim(np.min(n_odors)*0.1,np.max(n_odors)*10)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Significance criterion alpha')
+    plt.ylabel('Estimated number of odors')
+
+def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
+    N = 30
+    n_odors_list = []
+    for n_replicates in n_replicates_list:
+        overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=False,n_replicates=n_replicates,plot=False)
+        overlap = np.min([overlap,100])
+        n_odors = float(disc(N,128,N*(100-overlap)/100))
+        print n_replicates,overlap,n_odors
+        n_odors_list.append(n_odors)
+    
+    if fig == 'a':
+        color ='b'
+    else:
+        color ='g'
+    
+    plt.scatter(n_replicates_list,n_odors_list,s=20,c=color)
+    plt.xlim(np.min(n_replicates_list)*0.5,np.max(n_replicates_list)*2)
+    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Number of replications (subjects or distinct mixtures)')
+    plt.ylabel('Estimated number of discriminable odors')
+
+def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
+    N = 30
+    n_odors_list = []
+    overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=False,plot=False)
+    for C in Cs:
+        n_odors = float(disc(N,C,N*(100-overlap)/100))
+        print C,overlap,n_odors
+        n_odors_list.append(n_odors)
+    
+    if fig == 'a':
+        color ='b'
+    else:
+        color ='g'
+    
+    plt.scatter(Cs,n_odors_list,s=20,c=color)
+    plt.xlim(np.min(Cs)*0.5,np.max(Cs)*2)
+    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Number of components (C) available to mix odorants')
+    plt.ylabel('Estimated number of odors')
+
+def figs():
+    components = load_components()
+    odorants,tests,results = load_odorants_tests_results(components)
+    r = results
+
+    '''
+    fig3x(r,fig='a')
+    fig3x(r,fig='a',multiple_correction='fdr')
+    plt.savefig('a_overlap')
+    plt.close()
+
+    fig3x(r,fig='b')
+    fig3x(r,fig='b',multiple_correction='fdr')
+    plt.savefig('b_overlap')
+    plt.close()
+    '''
+
+    num_odors(r,fig='a')
+    num_odors(r,fig='a',multiple_correction='fdr')
+    plt.savefig('a_odors')
+    plt.close()
+
+    num_odors(r,fig='b')
+    num_odors(r,fig='b',multiple_correction='fdr')
+    plt.savefig('b_odors')
+    plt.close()
+
+    num_odors2(r,fig='a')
+    num_odors2(r,fig='b')
+    plt.savefig('odors2')
+    plt.close()
+
+    num_odors3(r,fig='a')
+    num_odors3(r,fig='b')
+    plt.savefig('odors3')
+    plt.close()
 
 def fit(results, components):
     """Basic OLS model to predict test results."""
