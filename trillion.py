@@ -613,10 +613,11 @@ def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_c
 
 def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False):
     N = 20
-    n_odors = []
+    n_odors_list = []
     for alpha in alphas:
         overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction=multiple_correction,plot=False)
-        n_odors.append(float(disc(N,128,N*(100-overlap)/100)))
+        n_odors = disc(N,128,N*(100-overlap)/100)
+        n_odors_list.append(float(n_odors))
     if multiple_correction == 'bonferroni':
         color ='g'
     elif multiple_correction == 'fdr':
@@ -624,13 +625,14 @@ def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple
     elif not multiple_correction:
         color ='b'
     
-    plt.scatter(alphas,n_odors,s=20,c=color)
+    plt.scatter(alphas,n_odors_list,s=20,c=color)
     plt.xlim(0.1,np.min(alphas)*0.5)
-    plt.ylim(np.min(n_odors)*0.1,np.max(n_odors)*10)
+    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel('Significance criterion alpha')
     plt.ylabel('Estimated number of odors')
+    return (alphas,n_odors_list)
 
 def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
     N = 30
@@ -654,6 +656,7 @@ def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
     plt.yscale('log')
     plt.xlabel('Number of replications (subjects or distinct mixtures)')
     plt.ylabel('Estimated number of discriminable odors')
+    return (n_replicates_list,n_odors_list)
 
 def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
     N = 30
@@ -676,6 +679,7 @@ def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
     plt.yscale('log')
     plt.xlabel('Number of components (C) available to mix odorants')
     plt.ylabel('Estimated number of odors')
+    return (Cs,n_odors_list)
 
 def figs():
     components = load_components()
@@ -694,26 +698,46 @@ def figs():
     plt.close()
     '''
 
-    num_odors(r,fig='a')
-    num_odors(r,fig='a',multiple_correction='fdr')
+    def write_data(data,name):
+        import csv
+        from itertools import izip
+        with open('%s.csv' % name,'w') as f:
+            transposed = []
+            writer = csv.writer(f)
+            for X,Y in data:
+                transposed += [X]
+                transposed += [Y]
+            transposed = izip(*transposed)
+            writer.writerows(transposed)
+            
+    data = []
+    data += [num_odors(r,fig='a')]
+    data += [num_odors(r,fig='a',multiple_correction='fdr')]
+    write_data(data,'a')
     plt.savefig('a_odors')
     plt.close()
 
-    num_odors(r,fig='b')
-    num_odors(r,fig='b',multiple_correction='fdr')
+    data = []
+    data += [num_odors(r,fig='b')]
+    data += [num_odors(r,fig='b',multiple_correction='fdr')]
+    write_data(data,'b')
     plt.savefig('b_odors')
     plt.close()
 
-    num_odors2(r,fig='a')
-    num_odors2(r,fig='b')
+    data = []
+    data += [num_odors2(r,fig='a')]
+    data += [num_odors2(r,fig='b')]
+    write_data(data,'2')
     plt.savefig('odors2')
     plt.close()
 
-    num_odors3(r,fig='a')
-    num_odors3(r,fig='b')
+    data = []
+    data += [num_odors3(r,fig='a')]
+    data += [num_odors3(r,fig='b')]
+    write_data(data,'3')
     plt.savefig('odors3')
     plt.close()
-
+ 
 def fit(results, components):
     """Basic OLS model to predict test results."""
     X = np.zeros((len(results),26+len(components)*2))
