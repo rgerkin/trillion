@@ -5,9 +5,11 @@ Analysis of the data in "Humans can discriminate more than 1 trillion olfactory 
 
 To generate the figures we used in our technical comment, clone this repository to your computer, set it as your current directory, and do the following in Python:
 
+<i>
 import trillion
 
 trillion.figs()
+</i>
 
 Naturally, you must have installed all dependencies.  
 
