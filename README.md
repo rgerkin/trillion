@@ -7,7 +7,6 @@ To generate the figures we used in our technical comment, clone this repository 
 
 <i>
 import trillion
-
 <i>
 trillion.figs()
 
