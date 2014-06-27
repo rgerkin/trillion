@@ -9,5 +9,7 @@ import trillion
 
 trillion.figs()
 
+Naturally, you must have installed all dependencies.  
+
 
 
