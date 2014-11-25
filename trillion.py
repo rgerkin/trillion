@@ -1,4 +1,4 @@
-from __future__ import division
+
 
 import sys
 import numpy as np
@@ -13,13 +13,22 @@ from collections import OrderedDict
 
 DILUTION = {'1/4':0.25, '1/2':0.5, 'not diluted':1.0}
 CORRECT = {'right':True, 'wrong':False}
+ALPHAS = [0.0005,0.001,0.002,0.005,0.01,0.02,0.05]
+N_REPLICATES_LIST = np.arange(2,16)**2
+C_LIST = 2**np.arange(5,15)
+VERBOSE = False
+
+def print_(*args,**kwargs):
+    global VERBOSE
+    if VERBOSE:
+        print(*args,**kwargs)
 
 def list_combos(n,k):
     """
     Returns a list of all combinations of n choose k.
     """
     
-    return list(combinations(range(n),k))
+    return list(combinations(list(range(n)),k))
 
 def get_n_combos(n,k):
     """
@@ -29,7 +38,14 @@ def get_n_combos(n,k):
 
     result = None
     try:
-        result = (factorial(n)/(factorial(k))/factorial(n-k))
+        fac_n = factorial(n)
+        fac_k = factorial(k)
+        fac_nk = factorial(n-k)
+        summ = fac_n + fac_k + fac_nk
+        if summ == np.inf or summ != summ:
+            raise ValueError("Values too large. Using Stirling's approximation")
+        result = fac_n/fac_k
+        result /= fac_nk
     except: # Catch all large number exceptions.  
         pass
     if not result or result == np.inf or result != result: # No result yet.  
@@ -56,7 +72,7 @@ def sphere(N,C,R):
     if R == 0:
         result = 1
     else:
-        result = get_n_combos(N,R)*get_n_combos(C-N,R)
+        result = get_n_combos(N,min(R,N))*get_n_combos(C-N,min(R,C-N))
     return result
 
 def ball(N,C,R):
@@ -83,6 +99,8 @@ def disc(N,C,d):
     low = get_n_combos(C,N) / ball(N,C,int(np.floor(d/2)))
     high = get_n_combos(C,N) / ball(N,C,int(np.ceil(d/2)))
     result = low+(high-low)*(d/2-np.floor(d/2)) # Interpolate.  
+    if result < 1:
+        result = 1
     return result
 
 def fdr(alpha,p_list):
@@ -97,7 +115,7 @@ def fdr(alpha,p_list):
     p_list_sorted = sorted(p_list)
     reject = [False for p in p_list]
     for k,p in enumerate(p_list):
-        print p,k*alpha/m
+        print_(p,k*alpha/m)
         if p <= k*alpha/m:
             reject[p_list.index(p)] = True
     return reject
@@ -186,7 +204,7 @@ class Odorant(object):
                 if type(desc) == list:
                     descriptors += desc
                 if type(desc) == dict:
-                    descriptors += [key for key,value in desc.items() if value > 0.0]
+                    descriptors += [key for key,value in list(desc.items()) if value > 0.0]
         return list(set(descriptors)) # Remove duplicates.  
 
     def descriptor_vector(self,source,all_descriptors):
@@ -261,7 +279,7 @@ class Odorant(object):
         String representation of the odorant.
         """
         
-        return u','.join([str(x) for x in self.components])
+        return ','.join([str(x) for x in self.components])
 
 class Component(object):
     """
@@ -483,9 +501,9 @@ def load_components():
     """
 
     components = []
-    f = open('Bushdid-tableS1.csv','r')
+    f = open('Bushdid-tableS1.csv','r',encoding='latin1')
     reader = csv.reader(f)
-    reader.next()
+    next(reader)
     component_id = 0
     for row in reader:
         name,cas,percent,solvent = row[:4]
@@ -505,9 +523,9 @@ def load_odorants_tests_results(all_components):
     odorants = {}
     tests = {}
     results = []
-    f = open('Bushdid-tableS2.csv','r')
+    f = open('Bushdid-tableS2.csv','r',encoding='latin1')
     reader = csv.reader(f)
-    reader.next()
+    next(reader)
     row_num = 0
     for row in reader:
         uid,n,r,percent,dilution,correct = row[:6]
@@ -527,12 +545,12 @@ def load_odorants_tests_results(all_components):
                 if len(components) not in [1,10,20,30]:
                     # If an odorant has a number of components which is not
                     # either 1, 10, 20, or 30.  
-                    print uid,[x for x in component_names if x not in [y.name for y in components]]
+                    print_(uid,[x for x in component_names if x not in [y.name for y in components]])
                 odorant = Odorant(components)
                 odorant.name = odorant_key
             elif row_num % 3 == 0:
                 # If any component is repeated across all the tests.  
-                print "Repeat of this odorant: %d" % odorant_key
+                print_("Repeat of this odorant: %d" % odorant_key)
             odorants[odorant_key] = odorant    
             if uid not in tests:
                 tests[uid] = Test(uid,[],dilution,correct)
@@ -567,7 +585,7 @@ def odorant_distances(results,subject_id=None):
             distance_n_subjects[pair] = 0
         distances[pair] += 0.0 if result.correct else 1.0
         distance_n_subjects[pair] += 1
-    for pair in distances.keys():
+    for pair in list(distances.keys()):
         # Divided by the total number of subjects.
         distances[pair] /= distance_n_subjects[pair]
     return distances
@@ -696,9 +714,16 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
             plt.ylabel('% subjects that can discriminate')
         elif fig == 'b':
             plt.ylabel('% mixtures that are discriminable')
-    overlap = (50.0 - w[0])/w[1]
-    print '50%% discrimination at %.3g%% overlap for alpha = %g' \
-        % (overlap,alpha)
+    if w[0] == 0.0 and w[1] == 0.0:
+        overlap = 0.0
+    else:
+        overlap = (50.0 - w[0])/w[1]
+    print_(('50%% discrimination at %.3g%% overlap for alpha = '+('%g' if alpha else '%s')) \
+        % (overlap,alpha))
+    if overlap > 100.0:
+        overlap = 100.0
+    if overlap < 0.0:
+        overlap = 0.0
     return overlap
 
 def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
@@ -759,12 +784,12 @@ def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple
     plt.ylabel('Estimated number of odors')
     return (alphas,n_odors_list)
 
-def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
+def num_odors2(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     new numbers of replicates (subjects or tests), plots the number of odors 
     implied by the equations in the supplemental material of Bushdid et al.  
-    Uses the N = 30 to illustrate the extreme values obtained.  
+    Uses N = 30 to illustrate the extreme values obtained.  
     Does not apply a correction for multiple comparisons for convenience, and 
     because that correction was not evident in Bushdid et al.  
     """
@@ -772,10 +797,10 @@ def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
     N = 30
     n_odors_list = []
     for n_replicates in n_replicates_list:
-        overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=False,n_replicates=n_replicates,plot=False)
+        overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=None,n_replicates=n_replicates,plot=False)
         overlap = np.min([overlap,100])
         n_odors = float(disc(N,128,N*(100-overlap)/100))
-        print n_replicates,overlap,n_odors
+        print_(n_replicates,overlap,n_odors)
         n_odors_list.append(n_odors)
     
     if fig == 'a':
@@ -792,12 +817,12 @@ def num_odors2(results,fig='a',n_replicates_list=2**np.arange(2,9,0.5)):
     plt.ylabel('Estimated number of discriminable odors')
     return (n_replicates_list,n_odors_list)
 
-def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
+def num_odors3(results,fig='a',Cs=C_LIST):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     component library sizes (the value C in Bushdid et al), plots the number of 
     odors implied by the equations in the supplemental material.  
-    Uses the N = 30 to illustrate the extreme values obtained.  
+    Uses N = 30 to illustrate the extreme values obtained.  
     Does not apply a correction for multiple comparisons for convenience, and 
     because that correction was not evident in Bushdid et al.  
     """
@@ -807,7 +832,7 @@ def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
     overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=False,plot=False)
     for C in Cs:
         n_odors = float(disc(N,C,N*(100-overlap)/100))
-        print C,overlap,n_odors
+        print_(C,overlap,n_odors)
         n_odors_list.append(n_odors)
     
     if fig == 'a':
@@ -824,14 +849,101 @@ def num_odors3(results,fig='a',Cs=2**np.arange(6,15)):
     plt.ylabel('Estimated number of odors')
     return (Cs,n_odors_list)
 
+def num_odors4(results,
+               fig='a',
+               alpha=0.05,
+               n_replicates_list=N_REPLICATES_LIST,
+               Cs=C_LIST):
+    """
+    Given test results, a reference figure panel ('a' or 'b'), an array of 
+    new numbers of replicates (subjects or tests), and an array of 
+    component library sizes (the value C in Bushdid et al), makes a heatmap of
+    the number of odors implied by the equations in the supplemental material.  
+    Uses the intermediate N = 20 case for convenience.  
+    Applies a correction for multiple comparisons.  
+    """
+
+    n_replicates_list = np.rint(n_replicates_list).astype(int)
+
+    N = 20
+    n_odors_array = np.zeros((len(n_replicates_list),len(Cs)))
+    for i,n_replicates in enumerate(n_replicates_list):
+        overlap = fig3x(results,fig=fig,alpha=alpha,n_replicates=n_replicates,multiple_correction='fdr',plot=False)
+        for j,C in enumerate(Cs):
+            n_odors = float(disc(N,C,N*(100-overlap)/100))
+            print_(C,n_replicates,overlap,n_odors)
+            if np.isnan(n_odors):
+                print_(N,C,overlap)
+            n_odors_array[i,j] = n_odors
+    
+    return (n_replicates_list,Cs,n_odors_array)
+
+def num_odors5(results,
+               fig='a',
+               alphas=ALPHAS,
+               Cs=C_LIST):
+    """
+    Given test results, a reference figure panel ('a' or 'b'), an array of 
+    alphas, and an array of component library sizes (the value C in Bushdid 
+    et al), makes a heatmap of the number of odors implied by the equations 
+    in the supplemental material. Uses the intermediate N = 20 case for 
+    convenience.  Applies a correction for multiple comparisons.  
+    """
+
+    alphas = np.round(alphas,5)
+
+    N = 20
+    n_odors_array = np.zeros((len(alphas),len(Cs)))
+    for i,alpha in enumerate(alphas):
+        overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction='fdr',plot=False)
+        for j,C in enumerate(Cs):
+            n_odors = float(disc(N,C,N*(100-overlap)/100))
+            print_(C,alpha,overlap,n_odors)
+            if np.isnan(n_odors):
+                print_(N,C,overlap)
+            n_odors_array[i,j] = n_odors
+    
+    return (alphas,Cs,n_odors_array)
+
+def num_odors6(results,
+               fig='a',
+               alphas=ALPHAS,
+               n_replicates_list=N_REPLICATES_LIST):
+    """
+    Given test results, a reference figure panel ('a' or 'b'), an array of 
+    alphas, and an array of new numbers of replicates (subjects or tests), 
+    makes a heatmap of the number of odors implied by the equations 
+    in the supplemental material. Uses the intermediate N = 20 case for 
+    convenience.  Applies a correction for multiple comparisons.  
+    """
+
+    alphas = np.round(alphas,5)
+    n_replicates_list = np.rint(n_replicates_list).astype(int)
+    
+    N = 20
+    n_odors_array = np.zeros((len(alphas),len(n_replicates_list)))
+    for i,alpha in enumerate(alphas):
+        for j,n_replicates in enumerate(n_replicates_list):
+            overlap = fig3x(results,fig=fig,alpha=alpha,n_replicates=n_replicates,multiple_correction='fdr',plot=False)
+            n_odors = float(disc(N,128,N*(100-overlap)/100))
+            print_(alpha,n_replicates,overlap,n_odors)
+            if np.isnan(n_odors):
+                print_(N,C,overlap)
+            n_odors_array[i,j] = n_odors
+    
+    return (alphas,n_replicates_list,n_odors_array)
+
+def get_results():
+    components = load_components()
+    odorants,tests,results = load_odorants_tests_results(components)
+    return results
+
 def figs():
     """
     Generates all figures and writes data points to disk.  
     """
 
-    components = load_components()
-    odorants,tests,results = load_odorants_tests_results(components)
-    r = results
+    r = get_results()
 
     def write_data(data,name):
         """
@@ -840,14 +952,14 @@ def figs():
         """
 
         import csv
-        from itertools import izip
+        
         with open('%s.csv' % name,'w') as f:
             transposed = []
             writer = csv.writer(f)
             for X,Y in data:
                 transposed += [X]
                 transposed += [Y]
-            transposed = izip(*transposed)
+            transposed = zip(*transposed)
             writer.writerows(transposed)
             
     # Using the method of Fig. 3a, for varying values of alpha.    
@@ -881,4 +993,43 @@ def figs():
     write_data(data,'3')
     plt.savefig('odors3')
     plt.close()
- 
+
+def scratch():
+    components = load_components()
+    odorants,tests,results = load_odorants_tests_results(components)
+    r = results
+    kind = 'a'
+    x1,y1,z1 = num_odors4(r,fig=kind)
+    x2,y2,z2 = num_odors5(r,fig=kind)
+    x3,y3,z3 = num_odors6(r,fig=kind)
+    
+    def heatmap(x,y,z,x_label,y_label):
+        import matplotlib.pyplot as plt
+        z = np.log10(z)
+        fig, ax = plt.subplots()
+        heatmap = ax.pcolor(z)
+
+        # put the major ticks at the middle of each cell
+        ax.set_xticks(np.arange(z.shape[1])+0.5, minor=False)
+        ax.set_yticks(np.arange(z.shape[0])+0.5, minor=False)
+
+        ax.set_xticklabels(y, minor=False)
+        ax.set_yticklabels(x, minor=False)
+
+        ax.set_xlabel(y_label)
+        ax.set_ylabel(x_label)
+        
+        cbar = fig.colorbar(heatmap)
+        ticks = [float(i.get_text()) for i in cbar.ax.get_yticklabels()]
+        tick_labels = [str('$10^{%d}$' % tick) for tick in ticks]
+        cbar.ax.set_yticklabels(tick_labels)
+        cbar.ax.set_ylabel('# of discriminable stimuli')
+     
+    replicates_str = '# subjects' if kind=='a' else '# tests'
+    alpha_str = 'Significance threshold $\\alpha$'
+    c_str = 'Odorant panel size (C)'
+    heatmap(x1,y1,z1,replicates_str,c_str) 
+    heatmap(x2,y2,z2,alpha_str,c_str)   
+    heatmap(x3,y3,z3,alpha_str,replicates_str)   
+    plt.show()
+    return [(x1,y1,z1),(x2,y2,z2),(x3,y3,z3)]
