@@ -750,10 +750,10 @@ def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_c
     plt.xlim(0.1,np.min(alphas)*0.5)
     plt.ylim(-1,70)
     plt.xscale('log')
-    plt.xlabel('Significance criterion alpha')
+    plt.xlabel(r'Significance criterion $\alpha$')
     plt.ylabel('%% overlap for 50% discrimination')
 
-def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False):
+def num_odors_vs_alpha(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False):
     """
     Given test results, a reference figure panel ('a' or 'b'), a range of 
     significance thresholds alpha, and whether or not to do multiple comparisons
@@ -780,11 +780,11 @@ def num_odors(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlabel('Significance criterion alpha')
+    plt.xlabel(r'Significance criterion $\alpha$')
     plt.ylabel('Estimated number of odors')
     return (alphas,n_odors_list)
 
-def num_odors2(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
+def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     new numbers of replicates (subjects or tests), plots the number of odors 
@@ -813,11 +813,14 @@ def num_odors2(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlabel('Number of replications (subjects or distinct mixtures)')
+    if fig == 'a':
+        plt.xlabel('Number of subjects')
+    elif fig=='b':
+        plt.xlabel('Number of tests')
     plt.ylabel('Estimated number of discriminable odors')
     return (n_replicates_list,n_odors_list)
 
-def num_odors3(results,fig='a',Cs=C_LIST):
+def num_odors_vs_C(results,fig='a',Cs=C_LIST):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     component library sizes (the value C in Bushdid et al), plots the number of 
@@ -845,11 +848,11 @@ def num_odors3(results,fig='a',Cs=C_LIST):
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlabel('Number of components (C) available to mix odorants')
+    plt.xlabel("Number of components (C) \n available to mix odorants")
     plt.ylabel('Estimated number of odors')
     return (Cs,n_odors_list)
 
-def num_odors4(results,
+def num_odors_vs_replicates_and_C(results,
                fig='a',
                alpha=0.05,
                n_replicates_list=N_REPLICATES_LIST,
@@ -878,7 +881,7 @@ def num_odors4(results,
     
     return (n_replicates_list,Cs,n_odors_array)
 
-def num_odors5(results,
+def num_odors_vs_alpha_and_C(results,
                fig='a',
                alphas=ALPHAS,
                Cs=C_LIST):
@@ -902,10 +905,10 @@ def num_odors5(results,
             if np.isnan(n_odors):
                 print_(N,C,overlap)
             n_odors_array[i,j] = n_odors
-    
+
     return (alphas,Cs,n_odors_array)
 
-def num_odors6(results,
+def num_odors_vs_alpha_and_replicates(results,
                fig='a',
                alphas=ALPHAS,
                n_replicates_list=N_REPLICATES_LIST):
@@ -938,14 +941,7 @@ def get_results():
     odorants,tests,results = load_odorants_tests_results(components)
     return results
 
-def figs():
-    """
-    Generates all figures and writes data points to disk.  
-    """
-
-    r = get_results()
-
-    def write_data(data,name):
+def write_data(data,name):
         """
         Given X,Y pairs (data) and a base name for the file, 
         writes that data to disk.
@@ -961,6 +957,13 @@ def figs():
                 transposed += [Y]
             transposed = zip(*transposed)
             writer.writerows(transposed)
+
+def figs():
+    """
+    Generates all figures and writes data points to disk.  
+    """
+
+    r = get_results()
             
     # Using the method of Fig. 3a, for varying values of alpha.    
     data = []
