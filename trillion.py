@@ -83,6 +83,7 @@ def ball(N,C,R):
     R = Maximum number of differing components.  
     """
 
+    assert R<=N
     result = 0
     for r in range(0,R+1):
         result += sphere(N,C,r)
@@ -90,15 +91,22 @@ def ball(N,C,R):
 
 def disc(N,C,d):
     """
-    Formula for number of discriminable odors from Bushdid supplemental material.
+    Formula for number of discriminable stimuli from Bushdid supplemental material.
     N = Number of components in a mixture.  
     C = Number of components to choose from.  
     d = Discriminability limen.  
     """
 
+    # Formulas only makes sense with integers, so we round up and down.  
     low = get_n_combos(C,N) / ball(N,C,int(np.floor(d/2)))
     high = get_n_combos(C,N) / ball(N,C,int(np.ceil(d/2)))
+    
+    # Geometric interpolation so we can graph smooth lines.  
+    low = np.log(low)
+    high = np.log(high)
     result = low+(high-low)*(d/2-np.floor(d/2)) # Interpolate.  
+    result = np.exp(result) 
+    
     if result < 1:
         result = 1
     return result
@@ -729,11 +737,11 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
     thirties = do(30,thirties_overlap,results)
 
     if plot:
-        plt.scatter(tens_overlap,tens,s=20,c='b')
-        plt.scatter(twenties_overlap,twenties,s=20,c='r')
-        plt.scatter(thirties_overlap,thirties,s=20,c='g')
-        plt.xlim(100,-1)
-        plt.ylim(0,100)
+        plt.scatter(tens_overlap,tens,s=40,c='w',marker='D')
+        plt.scatter(twenties_overlap,twenties,s=40,c='magenta')
+        plt.scatter(thirties_overlap,thirties,s=40,c='g',marker='s')
+        plt.xlim(101,-1)
+        plt.ylim(-1,101)
     overlap = np.concatenate((tens_overlap,twenties_overlap,thirties_overlap))
     percent_disc = np.concatenate((tens,twenties,thirties))
 
@@ -759,8 +767,9 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
         overlap = 100.0
     if overlap < 0.0:
         overlap = 0.0
-    if plt:
-        plt.plot([overlap,overlap],[0,100],'b--')
+    if plot:
+        plt.plot([100,0],[50,50],'k--')
+        plt.plot([overlap,overlap],[0,50],'k:')
     return overlap
 
 def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
@@ -812,13 +821,13 @@ def num_odors_vs_alpha(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25)
     elif not multiple_correction:
         color ='b'
     
-    plt.scatter(alphas,n_odors_list,s=20,c=color)
+    plt.scatter(alphas,n_odors_list,s=40,c=color)
     plt.xlim(0.1,np.min(alphas)*0.5)
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel(r'Significance criterion $\alpha$')
-    plt.ylabel('Estimated number of odors')
+    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
     return (alphas,n_odors_list)
 
 def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
@@ -845,7 +854,7 @@ def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST)
     else:
         color ='g'
     
-    plt.scatter(n_replicates_list,n_odors_list,s=20,c=color)
+    plt.scatter(n_replicates_list,n_odors_list,s=40,c=color)
     plt.xlim(np.min(n_replicates_list)*0.5,np.max(n_replicates_list)*2)
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
@@ -854,7 +863,7 @@ def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST)
         plt.xlabel('Number of subjects')
     elif fig=='b':
         plt.xlabel('Number of tests')
-    plt.ylabel('Estimated number of discriminable odors')
+    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
     return (n_replicates_list,n_odors_list)
 
 def num_odors_vs_C(results,fig='a',Cs=C_LIST):
@@ -880,7 +889,7 @@ def num_odors_vs_C(results,fig='a',Cs=C_LIST):
     else:
         color ='g'
     
-    plt.scatter(Cs,n_odors_list,s=20,c=color)
+    plt.scatter(Cs,n_odors_list,s=40,c=color)
     plt.xlim(np.min(Cs)*0.5,np.max(Cs)*2)
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
