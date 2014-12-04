@@ -9,7 +9,7 @@ from scipy.stats import binom
 import random
 import csv
 from datetime import datetime
-from collections import OrderedDict
+from collections import OrderedDict,Counter
 
 DILUTION = {'1/4':0.25, '1/2':0.5, 'not diluted':1.0}
 CORRECT = {'right':True, 'wrong':False}
@@ -664,6 +664,41 @@ def fraction_disc(results,N,overlap,fig,alpha=None,multiple_correction=False,n_r
     else:
         return fract_correct
 
+def fig2x(results,fig='b',plot=True):
+    """
+    Given test results, a reference figure panel ('b' or 'c'), plots the data
+    summary corresponding to Fig. 2 from Bushdid et al.
+    """
+
+    assert fig in ('b','c')
+    overlap_dict = {10:[9,6,3,0],
+               20:[19,15,10,5,0],
+               30:[29,20,10,0]}
+    
+    f, axarr = plt.subplots(1, 3, sharey=True)
+    for i,(N,overlaps) in enumerate(overlap_dict.items()):
+        X = []
+        Y = []
+        for j,overlap in enumerate(overlaps):
+            fract = fraction_disc(results,N,overlap,chr(ord(fig)-1),alpha=None)
+            Y += list(fract)
+            counts = Counter(fract)
+            observed = {_:0 for _ in fract}
+            for value in fract:
+                inc = (observed[value] + 1)/(counts[value] + 1)-0.5
+                X += [j+inc]
+                observed[value] += 1
+
+        axarr[i].scatter(X,Y)
+        axarr[i].set_xticks([0,1,2,3,4])
+        overlaps = np.array(overlaps)*100.0/N
+        axarr[i].set_xticklabels(['%.2g'%_ for _ in overlaps])
+    axarr[0].set_ylabel("% correct")
+    axarr[1].set_xlabel("% mixture overlap")
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.4)
+    #plt.show()
+
 def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None,plot=True):
     """
     Given test results, a reference figure panel ('a' or 'b'), an optional 
@@ -724,6 +759,8 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
         overlap = 100.0
     if overlap < 0.0:
         overlap = 0.0
+    if plt:
+        plt.plot([overlap,overlap],[0,100],'b--')
     return overlap
 
 def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
@@ -848,8 +885,8 @@ def num_odors_vs_C(results,fig='a',Cs=C_LIST):
     plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlabel("Number of components (C) \n available to mix odorants")
-    plt.ylabel('Estimated number of odors')
+    plt.xlabel("Number of components (C) \n in the molecular library")
+    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
     return (Cs,n_odors_list)
 
 def num_odors_vs_replicates_and_C(results,
