@@ -1,0 +1,652 @@
+% TEMPLATE for Usenix papers, specifically to meet requirements of
+%  USENIX '05
+% originally a template for producing IEEE-format articles using LaTeX.
+%   written by Matthew Ward, CS Department, Worcester Polytechnic Institute.
+% adapted by David Beazley for his excellent SWIG paper in Proceedings,
+%   Tcl 96
+% turned into a smartass generic template by De Clarke, with thanks to
+%   both the above pioneers
+% use at your own risk.  Complaints to /dev/null.
+% make it two column with no page numbering, default is 10 point
+
+% Munged by Fred Douglis <douglis@research.att.com> 10/97 to separate
+% the .sty file from the LaTeX source template, so that people can
+% more easily include the .sty file into an existing document.  Also
+% changed to more closely follow the style guidelines as represented
+% by the Word sample file. 
+
+% Note that since 2010, USENIX does not require endnotes. If you want
+% foot of page notes, don't include the endnotes package in the 
+% usepackage command, below.
+
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix,epsfig,endnotes,url,mathtools,tabulary,verbatim,graphicx,caption,subcaption}
+\begin{document}
+
+\setcounter{table}{0}
+\setcounter{section}{0}
+
+%don't want date printed
+\date{}
+
+%make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+\title{\Large \bf ``For whom the bell tolls: it tolls for $d$".  Why there is no evidence that humans can discriminate a trillion olfactory stimuli.}
+
+\author{
+{\rm Richard C. Gerkin}\\
+Arizona State University\\
+School of Life Sciences\\
+rgerkin@asu.edu
+\and
+{\rm Jason B. Castro}\\
+Bates College\\
+Department of Psychology\\
+Program in Neuroscience \\
+jcastro@bates.edu
+}
+
+\maketitle
+
+% Use the following at camera-ready time to suppress page numbers.
+% Comment it out when you first submit the paper for review.
+\thispagestyle{empty}
+
+
+\subsection*{Abstract}
+A recent \textit{Science} paper \cite{bushdid_humans_2014} proposed that humans can discriminate between at least a trillion olfactory stimuli. 
+Here, we show that this claim is the result of a fragile estimation procedure capable of producing nearly any result from the published data, 
+including values many orders of magnitude smaller than originally reported. 
+We conclude that there is no evidence for the original claim.  
+
+\section{Introduction}
+\label{sec:intro}
+A recent paper \cite{bushdid_humans_2014} proposed that humans can discriminate between at least a trillion olfactory stimuli. 
+Using that paper's methods to reanalyze the data it presented, 
+we here show that this estimate is problematically fragile. 
+Specifically, it varies systematically and sensitively 
+(over tens of orders of magnitude, in both directions), 
+for modest changes in incidental experimental and analysis parameters against which a result ought to be robust.  
+Had the experiment enlisted as few as 150 additional subjects similar to the original ones, 
+the same analysis would have concluded that \textit{all possible stimuli} are discriminable 
+(i.e. that there are more than $10^{29}$ discriminable olfactory stimuli). 
+By contrast, if the same experimental data were analyzed using moderately more conservative statistical criteria, 
+it would have concluded that there are fewer than 5,000 discriminable olfactory stimuli -- 
+no larger than the folk wisdom value that the new estimate purports to replace. 
+
+As a result, data describing the same underlying perceptual abilities admit a wide range of extremely disparate, 
+yet unobjectionable alternative conclusions (including both the largest and smallest possible estimates allowed by the analysis framework). 
+We therefore conclude that the framework is unsound. 
+There may be trillions of discriminable odor stimuli, or more, or fewer, 
+but that recent paper should have been silent on this issue.  
+Here we will first demonstrate the procedure's fragility, and then explain its origin. 
+For most of the paper, we remain agnostic about whether the psychophysical framework is \textit{conceptually} sound, 
+to highlight the fact that it has strictly \textit{methodological} problems of a statistical origin that do not depend on the validity of a competing set of assumptions. %% I wonder if the italics are moderately dickish.... I vote to drop them. %%
+In a concluding section, we explore possibilities for improving the estimate. 
+
+\section{Problems with the estimate}
+\label{sec:demonstration}
+
+The main concern is that the estimated number of discriminable stimuli depends steeply, systematically, and non-asymptotically on choices of arbitrary experimental parameters, 
+among them the number of subjects enrolled, the number of discrimination tests performed, and the threshold for statistical significance.  
+We will show below that the order of magnitude claim of `at least one trillion olfactory stimuli' requires that those parameters assume a very narrow set of values. 
+Certainly, the precise value of an estimate may change as additional data are collected, 
+but the estimate should not change \textit{in expectation}; it should not be possible to make an estimate arbitrarily large (or small), 
+simply by collecting more (or less) data. Similarly, the estimate itself should not become arbitrarily small or large with adjustment of a significance criterion. Estimates that scale systematically with such incidental parameter choices are considered statistically \textit{inconsistent}. It is the inconsistency of the present estimate that produces a tremendously large space of extremely different, yet unobjectionable alternative conclusions that can be reached about the number of discriminable olfactory stimuli. 
+
+
+\begin{figure}
+    %\centering
+    \includegraphics[width=0.45\textwidth]{figures/Fig1_StatPathology}
+    \caption{
+Properties of estimators. 
+Consistency is the idea that an estimate should asymptotically converge 
+as sample size increases (black line). 
+Uncertainty in measurement (gray area) may shrink with sample size, 
+but the estimate itself should remain bounded and asymptotically converge on the truth. 
+Estimates without this property are termed inconsistent (blue line), and are considered unreliable, as one can heavily bias a conclusion by making a specific choice of parameters. An estimate should also remain bounded for increasingly conservative or permissive choices of a significance criterion (not shown). 
+}
+    \label{fig:statpathology}
+\end{figure}
+
+
+To illustrate that we can correctly execute the analysis procedure, 
+Figure \ref{fig:reconstruction} shows our reproduction of the authors' Figure 3 \cite{bushdid_humans_2014}, 
+from which they drew their main conclusion. Our Figure \ref{fig:colormaps} and Table \ref{table:possible_results} quantify the fragility of this conclusion, 
+by generating values using the same framework but generalizing to the population with different numbers of subjects (or mixtures) tested, 
+and different choices of statistical threshold ($\alpha$) used for assessing discriminability.  
+Thus, we produced all values by analyzing the authors' original data, using their described methods, and varying only parameters. 
+Code for these and all subsequent analyses are available at \url{http://github.com/rgerkin/trillion}.  
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig2_Reconstruction}
+    \caption{
+Reproduction of the published main result, 
+from analysis of raw data made available in supplemental materials. 
+Top: Discriminability vs. Mixture overlap. 
+From this analysis, the paper derives $51\%$ as the critical value of mixture overlap defining ‘significant discriminability’. 
+Compare to Figure 3 in the original publication \cite{bushdid_humans_2014}. 
+Bottom: Number of discriminable mixtures vs. mixture overlap allowing discrimination. 
+The plot shows interpolated values of $z$ vs. $D$ (see equation \ref{eq:disc}). 
+For a value of $51\%$ as the critical mixture overlap separating the discriminable from the indiscriminable (obtained as above), 
+one obtains the `trillions' figure reported in the paper. 
+Compare to Figure 4 in the original publication.}
+    \label{fig:reconstruction}
+\end{figure}
+
+\begin{table}
+\caption{Definitions of parameters}
+\label{table:definitions}
+\begin{tabulary}{0.5\textwidth}{| c | p{6.5cm} |}
+\hline
+$z$ & Estimated number of discriminable olfactory stimuli \\
+\hline
+$C$ & Number of distinct compounds available to make mixtures \\
+\hline
+$N$ & Number of distinct compounds in a mixture \\
+\hline
+$O$ & Number of distinct compounds shared by a mixture pair \\
+\hline
+$D$ & Number of compounds in one mixture not shared by the other.  ($D = N-O$) \\
+\hline
+\emph{class} & All mixture pairs with the same value of $N$ and $O$. \\
+\hline
+$d$ & The value of $D$ for which mixtures of a \emph{class} are more likely than not to be discriminable at a rate significantly above chance. \\
+\hline
+\end{tabulary}
+\end{table}
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=1.0\textwidth]{figures/Fig3_Colormaps}
+    \caption{
+The estimation procedure supports any alternative conclusion, including the smallest and largest estimates allowable. 
+Left: Heat map showing alternative conclusions reached for different choices of a number of mixture pairs to test, 
+and application of different statistical criteria defining significance for discriminability. 
+Asterisks (*) show the approximate parameter regime ($N=20$ mixtures \& $\alpha=0.05$) used in the original study. 
+The white contour labeled `All' demarcates a regime in which one will conclude that all possible mixture stimuli ${128 \choose 30}$ are discriminable. 
+The contour labeled `smallest obtainable' demarcates a regime in which one will conclude that 
+there are as few discriminable stimuli as the framework allows ($z(D=N=30)$, from equation \ref{eq:disc}). 
+The contour labeled `colors' demarcates a regime in which 
+one concludes that the number of discriminable odor stimuli is the same order of magnitude as the number of number of discriminable colors. 
+Right: Heat map similar to left, only with number of subjects on the x axis.}
+    \label{fig:colormaps}
+\end{figure*}
+
+\begin{table}
+\centering
+\begin{tabulary}{0.02\textwidth}{|c|c|c|c|c|p{1.7cm}|}
+\hline
+$z$ & $S$ & $T$ & $\alpha$ & $C$ & Assumptions Needed \\
+\hline
+& 26 & 20 & 0.05 & 64 & (2) \\
+\hline
+& 9 & 9 & 0.001 & 128* & \\
+\hline
+& 26* & 9 & 0.005 & 128* & \\
+\hline
+& 9 & 20* & 0.05* & 128* & \\
+\hline
+& 26* & 20* & 0.05* & 128* & \\
+\hline
+& 200 & 20* & 0.05* & 128* & (1) \\
+\hline
+& 200 & 200 & 0.05* & 128* & (1) \\
+\hline
+& 26* & 20* & 0.05* & 256 & (2) \\
+\hline
+& 26* & 20* & 0.05* & 2048 & (2) \\
+\hline 
+\end{tabulary}
+\caption{Possible estimates of $z$, the number of discriminable olfactory stimuli, for different possible parameters values, in the N=30 case. 
+* indicates that the parameter value was used in the paper. 
+Assumptions: (1) new subjects perform similarly to old subjects; (2) discrimination performance does not change with C}
+\label{table:possible_results}
+\end{table}
+
+In the author’s experimental framework, there are three sets of experiments, varying in the number of distinct components $N$ per odorant mixture stimulus tested.  
+We consider the $N=30$ case (without loss of generality) for which there are $\sim 10^{29}$ possible olfactory stimuli, 
+and the smallest possible number of discriminable stimuli is $\sim 4500$ (see equation \ref{eq:disc}, in section \ref{sec:explanation} below).  
+Figure \ref{fig:colormaps} and Table \ref{table:possible_results} thus demonstrate that \textit{1)} there is a regime of reasonable parameter choices for which one concludes that all possible olfactory stimuli (i.e. all $\sim 10^{29}$ of them) are discriminable; 
+and \textit{2)} there is another regime of reasonable parameter choices for which one concludes that the smallest possible number of stimuli (i.e. only $\sim 4500$) are discriminable.  
+The only assumption required to obtain these values is that performance in new subjects is similar to performance in the original subjects.  
+
+The fragility of the estimate results from the authors' decision to interpret a modest (if very interesting) correlation -- between the discriminability of a pair of mixtures and the overlap (fraction of shared components) of those mixtures --
+as evidence that a particular degree of mixture overlap defines a boundary which partitions the discriminable from the indiscriminable.  
+Below, we explore the consequences of this decision, and its implications for calculating the number of discriminable odorants. 
+
+\section{Explanation of the problems with the estimate}
+\label{sec:explanation}
+
+\subsection{Recap of the basic procedure}
+\label{sec:recap}
+
+The paper's logic is built on an analogy to color vision, 
+where estimating the number of discriminable colors requires knowing only two numbers: 
+the size of the stimulus space (that is, the range of visible wavelengths), 
+and the minimally discriminable distance between a typical pair of stimuli (Fig. \ref{fig:spherepacking}). 
+Dividing the first number by the second amounts to asking how many discriminable intervals can be ‘packed’ into the stimulus space, 
+with that number providing an estimate of the number of discriminable color stimuli. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig4_SpherePacking}
+    \caption{
+`Sphere packing' to estimate the number of discriminable colors. 
+Left: hypothetical example showing the range of visible wavelengths. 
+Extremely distant stimuli (red dots) on this space are easy to discriminate, 
+whereas extremely close stimuli (black dots) are impossible to discriminate, 
+as they are beyond the resolution of color vision. 
+At some critical inter-stimulus distance, $d$, 
+stimuli will be `just discriminable' (green points). 
+A typical stimulus pair on the space, separated by distance $D$, 
+will tend to be discriminable if $D>d$, and indiscriminable if $D<d$. 
+This partitioning into discriminable and indiscriminable sets is captured in the sigmoidal shape 
+of the psychometric curve plotting discriminability vs. distance (right). 
+Knowing that an interval of length $d$ on the space will tend to span indiscriminable stimuli, 
+one can calculate how many such intervals can be `packed' onto the space
+to estimate the number of discriminable colors.}
+    \label{fig:spherepacking}
+\end{figure}
+
+
+Because olfactory stimuli do not have obvious physical dimensions analogous to wavelength, 
+olfaction is not amenable to an identical calculation.  
+Instead, the authors established a theoretical framework that let them make a similar calculation based upon the same underlying idea.  
+They proposed to divide the size of a investigator-determined olfactory stimulus space by a data-determined variable representing resolution in this space. 
+Instead of being continuous, one dimensional, and defined by some intrinsic stimulus variable like wavelength, 
+the olfactory stimulus space was defined to be the discrete, high-dimensional space spanned by all mixtures containing $N=30$ different components (molecules) that could be assembled from a library of $C=128$ molecules; 
+they also consider the $N=10$ and $N=20$ cases, which we ignore in this section with no loss of generality. 
+This space of possible mixture stimuli is astronomically large ${C \choose N}$, 
+owing to the proverbial `combinatorial explosion', 
+and each point in the space corresponds to a specific multi-component mixture. 
+
+One definition of distance between stimuli in this space is the number of components $D$ by which the stimuli differ. 
+For example, nearest neighbors would be stimuli sharing all components but one ($D=1$), 
+and the most distant points in this space would be stimuli differing in all components ($D=N$). 
+
+The paper showed that discriminability of a stimulus pair tends to increase with the distance $D$ between the stimuli in that pair, 
+and then argued for the existence of a special distance $d$ corresponding to the $D$ at which stimuli are ``just discriminable''.  
+In other words, for $D>d$ stimuli should more often than not be considered discriminable 
+and for $D<d$ they should more often than not be considered indiscriminable.  
+By calculating $d$, one could in turn readily calculate the number of stimuli within a distance $D=d$ of a typical point in the stimulus space using the provided formulas. 
+Geometrically, the set of stimuli with distance $D<=d$ from a reference stimulus corresponds to a filled “ball” of stimuli indiscriminable from the reference stimulus at its center.  
+Conversely, the reference stimulus should be discriminable from stimuli outside the ball.  
+We could thus count the number $z$ of non-overlapping balls that can be packed into the stimulus space, 
+as the authors propose, by analogy to the example for color vision: 
+
+\begin{equation}
+\label{eq:disc}
+z(d) = \frac{\binom{C}{N}}{ball(d)}  
+\end{equation}
+
+where ``ball'' is defined as: 
+
+\begin{equation}
+\label{eq:ball}
+ball(r) = \sum_{x=0}^{r} \binom{N}{x}\binom{C-N}{x}
+\end{equation} 
+
+Equation \ref{eq:disc} is produces the final estimate $z$ of the number of discriminable stimuli. 
+$C$ and $N$ are fixed by experimenter choices, 
+and $d$ -- the resolution-like term -- is the only quantity derived from data that is related to measured psychophysical performance. 
+Assuming this framework is conceptually unproblematic (but see \cite{meister_can_2014}), 
+the only question becomes: How do we derive $d$ from the data? 
+
+\subsection{Derivation of the critical parameter $d$} 
+\label{sec:derivation}
+
+\subsubsection{The threshold approach} 
+
+A classic psychometric curve (Figure \ref{fig:spherepacking}), showing discriminability as a function of inter-stimulus distance $D$, admits a few plausible ways to derive $d$. 
+The simplest is to simply use a discriminability threshold, such that $d$ corresponds to the distance $D$ at which the 'fraction correct' reaches a certain value.  
+In the paper's three-alternative forced-choice experiments, chance responding would produce a fraction correct of $\frac{1}{3}$, 
+so the appropriate threshold would be somewhere between $\frac{1}{3}$ and 1.  
+This threshold choice would be arbitrary -- we might say that a fraction correct of $\frac{1}{2}$ reflects discriminable, 
+or alternatively we might choose $\frac{2}{3}$ or any other value in that range.  
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig5_Sigmoids}
+    \caption{
+Behavior of psychometric curves for simulated data describing discriminability vs. inter-stimulus distance. 
+A) left: A sharply sigmoidal data set in which 
+discriminability changes dramatically and categorically at a critical inter-stimulus distance, $d$. 
+Right: The derivation of $d$ is essentially invariant for the choice of threshold defining discriminability. 
+B) Same as above, only for a less sharply sigmoidal data set. 
+There is still a regime in which $d$ is largely invariant for a choice of threshold. 
+C) Same as above, only for a weakly sigmoidal data set. 
+Here, there is no principled means for choosing that $d$ that is characteristic of discriminability relationships for stimuli. 
+The data are not consistent with an interpretation in which 
+there is a characteristic `length scale' for inter-stimulus distances.}
+    \label{fig:sigmoids}
+\end{figure}
+
+If we are lucky, the psychometric curve will be so steep near some value of $D$ (Figure \ref{fig:sigmoids}A) that the derived $d$ will vary minimally over a wide range of choices for the threshold.  
+In this scenario, we might be confident that the $d$ we derive is a truly meaningful measure of resolution -- it would be robust.  
+If not (Figure \ref{fig:sigmoids}C), it will be very fragile.  
+To test whether this scenario applies to the data from the paper, we plotted the fraction discriminated vs percent mixture overlap for that data (Figure \ref{fig:hardthresh}), and then  
+varied the threshold from $\frac{1}{3}$ to 1, 
+using regression and interpolation to obtain the distance $d$ corresponding to this threshold (Figure \ref{fig:z_d_threshold}, red line), 
+by analogy to the authors' procedure.  
+We subsequently used those values to compute the corresponding number of discriminable stimuli $z$ (Figure \ref{fig:z_d_threshold}, black line).  
+These results show that neither the estimates of $d$ nor by extension that of $z$ are robust across this range of thresholds, 
+so it is impossible to report with any confidence the number of discriminable stimuli using this approach. 
+Intuitively, this ``choose your favorite threshold'' strategy is problematic, 
+as it effectively amounts to picking a target number between $\sim 10^{3}$ and $\sim 10^{29}$. 
+Below, we show that the actual procedure used is even more problematic, 
+even though it is nominally employed to make a more principled choice of threshold. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig6_HardThresh}
+    \caption{
+Fraction discriminable vs percent overlap.}
+    \label{fig:hardthresh}
+\end{figure} 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig7_Z_D_vs_threshold}
+    \caption{
+Relationship between estimated discriminable stimuli and choice of threshold defining discriminability. 
+The red curve shows the critical distance $d$ derived from the data in the original paper \cite{bushdid_humans_2014} 
+for a range of discriminability thresholds between $100\%$ correct discrimination, 
+and chance ($33\%$) discrimination. 
+The curve was obtained by regression, as in the original study. 
+Note that $d$ simply exhibits exhibits a constant-slope relationship with threshold, 
+meaning the data are not defined by a characteristic length scale.
+The black curve shows the estimated number of discriminable stimuli vs threshold. 
+This relationship was obtained directly from $d$, using equation \ref{eq:disc}, as in the original paper. 
+Note that very modest and unobjectionable different choices for threshold result in extremely disparate estimates. 
+The table in the inset shows calculated values for different choices of threshold.}
+    \label{fig:z_d_threshold}
+\end{figure}
+
+\subsubsection{Add another threshold} 
+A variation on the above approach, and the one used in the paper, 
+is to apply a threshold not to the fraction \textit{discriminated}, 
+but to the fraction \textit{significantly discriminable}.  
+In other words, determine for which subjects (or alternatively, for which classes of mixtures) the fraction discriminated is significantly greater than $\frac{1}{3}$, 
+i.e. for which subjects the null hypothesis of chance discrimination can be rejected.  
+To facilitate visualization of this step, the authors re-plotted the original data (fraction correctly discriminated) as fraction significantly discriminable (Figure \ref{fig:reconstruction}).  
+This view of the data again provides a linear relationship between distance $D$ and, in this case, fraction significantly discriminable, 
+which holds across all the values of $N$ tested.  
+The relationship is now steeper than it was for fraction discriminable (compare Figures \ref{fig:reconstruction} and \ref{fig:hardthresh}) 
+because the extra hypothesis-testing step acts as a strong non-linear threshold that exaggerates otherwise small differences in the data.  
+Again an arbitrary threshold choice is required; they chose $50\%$ significantly discriminable, 
+and computed $d$ using linear regression and interpolation as above.  
+
+Because the linear relationship between the distance $D$ and the fraction significantly discriminable (\ref{fig:reconstruction}) is steeper than it is for $D$ and the fraction discriminated (\ref{fig:hardthresh}), 
+the former would appear to be less fragile than the latter.  
+Indeed, varying the threshold (i.e. $50\%$) itself (not shown), 
+will have significantly less effect on the computed $d$ (and consequently on $z$) for the former than for the latter.  
+However, by introducing a hypothesis-testing step, $d$ now also varies systematically with the number of subjects enrolled in the study (and the number of mixtures tested), 
+and with the choice of significance criterion $\alpha$.  
+This is because each data point used to compute $d$ becomes the result of a hypothesis test, 
+each of which depends critically on sample size and test specificity.  
+Because $d$ is then fed into an expression (equation \ref{eq:disc}) that explodes geometrically, 
+the result is a recipe for producing any of a range of values for $z$ that one might choose. 
+If one enlists more subjects or slackens the significance criterion, 
+a very large (even maximally large) number will be obtained. 
+If one enlists fewer subjects or makes the significance criterion more strict, 
+a very small (even minimally small) number will be obtained. 
+Figure $\ref{fig:alpha_dependency}$ shows the explicit dependence of the estimate on these quantities. 
+Naturally, these can be varied in tandem too, with even more dramatic consequences, 
+as described above (Figure \ref{fig:colormaps} and Table \ref{table:possible_results}). 
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=1.0\textwidth]{figures/Fig8_T_alpha_dependency}
+    \caption{
+Steep, systematic, and non-asymptotic dependence of the estimate on sample size and threshold for statistical significance. 
+A) Dependence of the estimate (for mixtures of $N=30$) on sample size. 
+Blue shows dependence on the number of subjects enrolled in the study, 
+green shows dependence on the number of mixtures tested. 
+Once the number of mixtures or subjects tested is $\sim 150$ (by no means an unusually large sample size), 
+we are guaranteed the conclusion that all mixtures are discriminable, in contradiction with experimental results. 
+B) Dependence of the estimate on the significance criterion with (blue) and without (green) a correction for multiple comparisons.}
+    \label{fig:alpha_dependency}
+\end{figure*} 
+
+A hypothesis test is meant to assess the strength of evidence for or against a hypothesis (often against a null hypothesis), not to make a point estimate.  
+However, we suspect that it may not be uncommon for researchers to use hypothesis testing in the manner done in the original paper -- 
+to count the number or fraction of data points exhibiting a certain property.  
+In many cases this may amount to a venial statistical sin with (hopefully) benign consequences.  
+But that is not the case here, due in part to the extremely steep dependence of $z$ on $d$ guaranteed by equation \ref{eq:disc}. 
+
+If one claims a value to be a meaningful bound for a psychophysical quantity, 
+it is fair to ask how vigorously would one have to defend a specific choice of arbitrary experimental parameters to defend a particular order-of-magnitude range around that figure. 
+Simply put, the systematic sensitivities exhibited here severely undermine the plausibility and relevance of the originally reported estimate. 
+Due to these sensitivities, one could pick almost any number of discriminable stimuli in advance, 
+and affirm this number using these or similar data. 
+
+\section{Correlations in stimulus space}
+\label{correlations}
+
+The calculation of $d$ by any method relies critically on a strong and \textit{a priori} unlikely assumption not articulated in the original paper, 
+but recently critiqued by Meister \cite{meister_can_2014}. 
+This calculation is not valid unless the biologically-determined perceptual space is homeomorphic to the investigator-determined stimulus space. 
+That is, the distance separating a pair of stimuli $X$ in stimulus space should be highly correlated with the distance separating them in perceptual space -- 
+not just on average across stimulus classes (Figures \ref{fig:reconstruction} and \ref{fig:hardthresh}), but for individual pairs of stimuli as well.  Then ``nearby" stimuli would evoke similar percepts, and ``distant" stimuli would evoke dissimilar ones.  
+
+Consider the low-dimensional visual system example (Figure \ref{fig:spherepacking}) that was used to motivate the original procedure. 
+Suppose instead that there were redundancy in visual perception so that in some cases, 
+disjoint and non-overlapping intervals corresponded to the \textit{same} percept.
+One might stilll observe a correlation between discriminability and difference in wavelength, 
+but no difference in wavelength $d$ will partition stimulus pairs into discriminable and indiscriminable sets. 
+In other words, some pairs with $D>d$ will be indiscriminable, 
+and some pairs with $D<d$ will be discriminable. 
+Consequently, the sphere-packing calculation falls apart. 
+There is no `packing problem' because the structure of the perceptual space has not obliged a key assumption: 
+homeomorphism to the stimulus space. 
+For the sphere-packing calculation to work, 
+the things we elect to call stimulus dimensions must be treated as such by perception. 
+
+This possibility, the existence of very different stimuli that are nonetheless indiscriminable, 
+has been demonstrated by Sobel and colleagues \cite{weiss_perceptual_2012}, 
+and is also apparent in the data under consideration here 
+(where $X\%$ of stimulus pairs differing even by all components are nonetheless considered indiscriminable).  
+There are alternative reasons why the noisy relationship between discriminability and inter-stimulus distance might arise, 
+such as differences in resolution on different parts of the stimulus space, that the authors suggest.  
+But for the percept-counting enterprise to be credible, 
+some attempt to describe a perceptual space that accounts for this must be made. 
+
+Instead, it was assumed for the purposes of calculation that each component of the library 
+(of size $C=128$ in the original study) 
+spans a relevant additional dimension for perception to explore: 
+each chemical in the library is treated as an olfactory primary that is orthogonal to all the others. 
+This is the assumption, codified in the numerator of equation \ref{eq:disc}, 
+that allows for a massive space of potential discriminable stimuli. 
+Indeed, the guaranteed runaway growth of the numerator as molecules are added to the $C$-sized library was offered in the original paper as an argument for why the reported trillion figure is a lower bound -- after all, $C$ could always be higher. 
+
+It is worthwhile to quantify the behavior of the estimate as $C$ changes. 
+First, the estimate depends geometrically on $C$, 
+with a power law exponent of $\sim 30$ (Fig. \ref{fig:z_vs_C}, green line). 
+In other words, if the chemical library were doubled, 
+the estimate $z$ increases by a factor of $2^{30}$. 
+If the component library were increased to the size of a standard flavor and fragrance catalog ($\sim 2000$ chemicals), 
+the estimate would increase to $z=10^{41}$, 
+implying a unique olfactory percept for each carbon atom on earth. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/FigX_C}
+    \caption{
+z vs C.}
+    \label{fig:z_vs_C}
+\end{figure} 
+
+Subjects' performance could become worse when mixtures are drawn from this larger, more complete library, 
+and we acknowledge that we cannot know in advance what the newly calculated resolution $d$ would be on the new stimulus space.  
+In other words, as the numerator of equation \ref{eq:disc} increases, 
+the denominator given by equation \ref{eq:ball} might conveniently grow proportionally.  
+Let us therefore assume that with a library of sufficient size, 
+so many mixtures become indiscriminable that the resolution becomes as poor as the framework allows, with $d=N$. 
+Even in this edge case, if only mixtures differing in all components were discriminable, 
+we would still calculate $10^{21}$ unique percepts. 
+If $C$ is increased to $10^6$, 
+the minimal possible number of discriminable percepts 
+(under the assumption of worst measurable performance, as above) 
+is $10^{61}$, or ten million trillion unique olfactory percepts for every carbon atom on earth (Fig. \ref{fig:z_vs_C}, red line). 
+One may object that the inflation of $C$ here is an unfair critique, 
+as the perceptual redundancy of molecules must at some point provide an important constraint on the size of the artificially constructed stimulus space. 
+But this is the essence of the problem with equation \ref{eq:disc}: 
+where does that point lie, 
+and why wasn’t the constraint important to consider for the original $C=128$ molecular library?
+
+\section{Avenues for improving the estimate}
+
+We therefore propose an alternative procedure: 
+use experimental data to create a working map of the perceptual space, 
+and then apply the sphere-packing framework to that map, 
+rather than to a map of the stimulus space.  
+There are many cases in psychophysics and elsewhere of subject responses to stimuli being used 
+to create maps of the underlying perceptual (or conceptual) representations of those stimuli [refs].  
+These maps are characterized by the attribute that pairs of items which are considered intuitively to be perceptually near 
+(rated similar or difficult to discriminate) are nearer to one another on the map than pairs of items 
+which are perceptually more distant (rated dissimilar or easy to discriminate).  
+There are many algorithms for generating such maps, 
+many of which have been used before in olfaction, 
+including variants of PCA \cite{khan_predicting_2007,koulakov_in_search_2011,zarzo_identification_2006}, 
+non-negative matrix factorization (NMF, \cite{castro_categorical_2013}), 
+and multi-dimensional scaling \cite{mamlouk_quantifying_2003}.  
+While there are open questions in the generation of these maps 
+(e.g. how many dimensions should they have?), 
+they all have the virtue that their accuracy can be checked 
+(e.g. by examining the correlation between subjects' indications of item pair dissimilarity and the distance between the pair on the map), 
+and thus the maps can be improved. 
+Developing these maps may also have the collateral benefit of revealing stimulus dimensions intrinsic to olfaction (if any), 
+which could constrain the experimental choice of a resolution to measure.
+
+Unfortunately, it is difficult if not impossible to create these maps from the data discussed here, 
+because each mixture of a tested pair is used only once, 
+in that pair alone, and never in any other pairs.  
+Thus, there are no serial comparisons of the same mixture that could be used to anchor a stimulus on the map 
+relative to anything other than that one stimulus against which it was compared.  
+Thus, there is no way to compute distances between stimuli that do not appear together in a tested pair.  
+In future experiments such serial repetition of already-tested mixtures would be required 
+to build up a data set to which the proposed method could be applied.  
+\section{Appendix} 
+
+Here, we provide a more detailed statistical argument describing the procedure's extreme sensitivity to incidental parameters. 
+The crux of the statistical issue is this: 
+the procedure could only be valid if $d$, the estimated difference limen used in the calculation step, 
+is a measure of olfactory resolution that converges to the true value of this quantity as more data is collected, 
+i.e. if it is consistent. 
+
+`Significantly discriminable' is a moving target dependent on sample size, 
+choice of significance criterion, and correction for multiple comparisons. And
+ $d$ is the only measured value used in subsequent calculations (equation \ref{eq:disc}), 
+Together, this guarantees that the estimate of $z$ in the original paper is a moving target as well, 
+dependent on these same parameters.
+$d$ is generated by testing a number of null hypotheses, 
+and is closely related to the fraction of these which are rejected.  
+But the probability of and criteria for rejection of these null hypotheses depends critically on sample size and $\alpha$, the values
+that we explored in Figure \ref{fig:colormaps} and Table \ref{table:possible_results}. 
+Certainly, we would agree that there is nothing objectionable about the specific parameters chosen in the original study. 
+However, there is nothing objectionable about many other parameters either. 
+
+In effect, calculating $d$ is somewhat like judging whether a coin meets a cutoff for being fair based on a series of tosses. 
+It matters very much how many tosses one makes, 
+and how much deviation from chance one is willing to tolerate before calling a coin unfair. 
+If you have no particular reason to believe a coin is unfair, 
+you might be disinclined to call it unfair if you observe $\frac{6}{10}$ ($60\%$) heads, 
+but probably not if you observed $\frac{600}{1000}$ heads 
+(also $60\%$). 
+If you own a casino, you might call 5100 heads in 10000 ($51\%$) evidence of an unfair coin. 
+
+A similar situation applies in the paper's analysis by considering its formal definition of $d$ 
+(a definition we verified by reconstructing the paper's critical figures (Fig. \ref{fig:reconstruction}). 
+$d$ is defined as that inter-stimulus distance $D$ for which $50\%$ of subjects can significantly discriminate a mixture class. 
+By a `mixture class' we denote the set of mixture pairs with the same number of total components ($N$) 
+as well as the same number of shared, or overlapping ($O$) components ($O=N-D$). 
+For example, the mixture pair $ABC$ vs. $ABD$ would be members of the mixture class of $N=3$ having ($N-D=2$) shared components. 
+We will focus below on calculations pertaining to the number of tests $T$ per mixture class, 
+but the same argument is readily translated over to the number of subjects $S$.
+
+To assess significant discriminability from chance, 
+the authors used a two-tailed binomial test. 
+Thus if a p-value is smaller than $\frac{\alpha}{2}$ then the subject is considered able to significantly discriminate the mixture class.  
+The p-value is given by 1 minus the cumulative binomial distribution function for $n=T$ trials, $k$ successes, 
+and a probability of success equal to $\frac{1}{3}$, 
+with $k$ corresponding to the number of subjects discriminating correctly, and $\frac{1}{3}$ to chance in a 3-way forced choice task.  
+Thus, the subject's discrimination performance is significant if: 
+
+\begin{equation}
+\label{eq:analytical1}
+\alpha/2 > 1 - cdf_{binomial}(T,k,\frac{1}{3}) = \sum_{i=0}^{k} \binom{T}{i}(\frac{1}{3})^{i}(\frac{2}{3})^{T-i}
+\end{equation}
+
+For $\alpha=0.05$, $T=20$ (as used in the paper), this inequality is satisfied for $k>=11$.  
+For each subject, $k$ might be any value between 0 and 20 depending on olfactory acuity.  
+If $k>=11$ for more than $50\%$ of subjects, 
+then the value of $D$ characterizing that mixture pair is necessarily $>d$.  
+If $k>=11$ for fewer than $50\%$ of subjects, then $D<d$.  
+If $k>=11$ for exactly $50\%$ of subjects, then $D=d$.  
+The actual value of $d$ is obtained by regression in the spirit of the above.  
+
+What kind of subject can discriminate successfully 11 times out of 20?  
+Consider a mixture class $X_{N,D}$ (characterized by $N$ and $D$), 
+and a subject performance of $f_{N,D}$, 
+corresponding to the proportion of mixtures correctly discriminated from a sample of size $T$.  
+Note that $f_{N,D}$ is simply the abscissa of Figure 1 in the original paper \cite{bushdid_humans_2014}).   
+A subject with $f_{N,D}=0.55$ would get $k=T*f_{N,D}=11$ out of $T=20$ correct on average.  
+So we can rewrite the inequality above as an equation:  
+
+\begin{equation}
+\label{eq:analytical2}
+1 - \alpha/2 = \sum_{i=0}^{f_{N,D}*T} \binom{T}{i}(\frac{1}{3})^{i}(\frac{2}{3})^{T-i}
+\end{equation}
+
+If the above equation is satisfied, then the subject will be considered to be on the boundary 
+between significantly discriminating and not significantly discriminating mixture pairs in the class.  
+If half of subjects perform better than $f_{N,D}$, and half less, 
+then half of subjects will be considered to significantly discriminate mixture pairs in the class (and half not), 
+and so $d$ will be set equal to $D$.  
+This is simply the definition of d.
+
+The value $f_{N,D}$ for which that equation is satisfied depends upon $\alpha$ and $T$.  
+$f_{N,D}$ is related to $N$ and $D$ through the data, 
+and so the value of $D$ for which the equation is satisfied (i.e. $D=d$)
+depends upon $\alpha$, $T$, and the data.  
+However, it is inappropriate for the discriminability limen to depend on $\alpha$ and $T$ in this way.  
+As we showed above, this has serious consequences for the estimate of $d$, and therefore also for the estimate of $z$.  
+It is what makes $z$ inconsistent.  
+
+Figure \ref{fig:alpha_crossing} shows the relationship between the critical $f_{N,D}$, $T$, and $\alpha$.  
+Note that this relationship is independent of the data.  
+The data only determine how $f_{N,D}$ is in turn related to $D$ and consequently to $z$.  
+In summary, a smaller (larger) value of $\alpha$ or $T$ requires a much higher (lower) value of $f_{N,D}$ to satisfy the equation, 
+resulting in a much smaller (larger) value of $d$ and therefore $z$.  
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.475\textwidth]{figures/Fig9_alpha_Crossing}
+    \caption{
+Fraction discriminable at which significance is reached.}
+    \label{fig:alpha_crossing}
+\end{figure} 
+
+With a sufficient number of subjects (or tests), 
+even barely above chance performance can produce estimates of $z$ equal to the maximum possible number of stimuli (Figures \ref{fig:colormaps} and \ref{fig:alpha_dependency}).  
+In fact, this is guaranteed by equation \ref{eq:analytical2}.  
+The critical values of $f_{N,D}$ required for statistical significance will asymptotically approach $\frac{1}{3}$ 
+as $T$ approaches infinity.  
+The same principle applies to a consideration of changes to the number of subjects $S$, 
+instead of the number of tests.  
+This illustrates the core of the problem.  
+Discriminating significantly above chance can be a very high bar or a very low bar 
+depending on the parameters of the experiments and the analysis, including $S$, $T$, and $\alpha$.  
+
+{\footnotesize \bibliographystyle{acm}
+\bibliography{references}}
+
+\end{document}
+
+
+
+
+
+
+
