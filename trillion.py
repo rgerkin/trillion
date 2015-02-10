@@ -1,5 +1,3 @@
-
-
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,15 +11,20 @@ from collections import OrderedDict,Counter
 
 DILUTION = {'1/4':0.25, '1/2':0.5, 'not diluted':1.0}
 CORRECT = {'right':True, 'wrong':False}
-ALPHAS = [0.0005,0.001,0.002,0.005,0.01,0.02,0.05]
+ALPHAS = [0.0005,0.001,0.0025,0.005,0.01,0.025,0.05]
 N_REPLICATES_LIST = np.arange(2,16)**2
 C_LIST = 2**np.arange(5,15)
 VERBOSE = False
+OVERLAPS = {10:[9,6,3,0],
+            20:[19,15,10,5,0],
+            30:[29,20,10,0]}
+N_TESTS = 20
+N_SUBJECTS = 26
 
 def print_(*args,**kwargs):
     global VERBOSE
     if VERBOSE:
-        print(*args,**kwargs)
+        print(args,kwargs)
 
 def list_combos(n,k):
     """
@@ -49,9 +52,12 @@ def get_n_combos(n,k):
     except: # Catch all large number exceptions.  
         pass
     if not result or result == np.inf or result != result: # No result yet.  
-        x = stirling(n) - stirling(k) - stirling(n-k) # Use Stirling's approx.
-        result = np.exp(x) 
-    
+        if n == k or k == 0:
+            result = 1
+        else:
+            x = stirling(n) - stirling(k) - stirling(n-k) # Use Stirling's approx.
+            result = np.exp(x) 
+        
     return result
 
 def stirling(n):
@@ -110,6 +116,49 @@ def disc(N,C,d):
     if result < 1:
         result = 1
     return result
+
+def disc_prime(N,C,d):
+    """
+    Corrected formula for number of discriminable stimuli from Gerkin and Castro.
+    N = Number of components in a mixture.  
+    C = Number of components to choose from.  
+    d = Discriminability limen.  
+    """
+
+    #d = d-1
+    
+    # Formulas only makes sense with integers, so we round up and down.  
+    low = get_n_combos(C,N) / ball(N,C,int(np.floor(d)))
+    high = get_n_combos(C,N) / ball(N,C,int(np.ceil(d)))
+    
+    # Geometric interpolation so we can graph smooth lines.  
+    low = np.log(low)
+    high = np.log(high)
+    result = low+(high-low)*(d-np.floor(d)) # Interpolate.  
+    result = np.exp(result) 
+    
+    if result < 1:
+        result = 1
+    return result
+
+'''
+def disc_brute(N,C,d):
+    """
+    Compute discriminable stimuli by brute force.  
+    N = Number of components in a mixture.  
+    C = Number of components to choose from.  
+    d = Discriminability limen.  
+    """
+
+    combos = list_combos(C,N)
+    n_combos = len(combos)
+    discriminable = np.zeros((len(combos),len(combos)))
+    for i in range(n_combos):
+        for j in range(n_combos):
+            discriminable[i][j] = len(set(combos[i]).difference(combos[j])) >= d
+    result = 1+discriminable.sum(axis=1).max()
+    return result
+'''
 
 def fdr(alpha,p_list):
     """
@@ -221,13 +270,13 @@ class Odorant(object):
         The vector will contain positive floats.
         """
         
-        vector = np.zeros(len(all_descriptors))
+        vector = np.zeros(len(all_descriptors[source]))
         for component in self.components:
             if source in component.descriptors:
                 desc = component.descriptors[source]
                 if type(desc) == list:
                     for descriptor in desc:
-                        index = all_descriptors.index(descriptor)
+                        index = all_descriptors[source].index(descriptor)
                         assert index >= 0
                         vector[index] += 1
                 if type(desc) == dict:
@@ -319,6 +368,9 @@ class Component(object):
             self.descriptors[source] = cas_descriptors[self.cas]
             # For sigma_ff this will be a list.  
             # For dravnieks this will be a dict.  
+
+    def __str__(self):
+        return self.name
 
 class Test(object):
     """
@@ -465,6 +517,16 @@ class Test(object):
         sv = self.single.descriptor_vector2(all_descriptors)
         dv = self.double.descriptor_vector2(all_descriptors)
         return np.corrcoef(sv,dv)[1][0]
+
+    def descriptors_difference(self,source,all_descriptors):
+        """
+        Given a data source, returns the absolute difference between the descriptors
+        of the two odorants.
+        """
+
+        sv = self.single.descriptor_vector(source,all_descriptors)
+        dv = self.double.descriptor_vector(source,all_descriptors)
+        return np.abs(sv-dv)
 
     def n_undescribed(self,source):
         """
@@ -626,7 +688,7 @@ def correct_matrix(results,N,overlap):
     corresponding to the correctness of that subject's response on that test.  
     """
 
-    results = [r for r in results if r.test.N==N and r.test.overlap()==overlap]
+    results = [r for r in results if (N is None or r.test.N==N) and (overlap is None or r.test.overlap()==overlap)]
     subjects = [r.subject_id for r in results]
     subjects = list(set(subjects))
     tests = [r.test for r in results]
@@ -637,7 +699,7 @@ def correct_matrix(results,N,overlap):
         i = subjects.index(result.subject_id)
         j = tests.index(result.test)
         correct[i,j] = result.correct
-    return correct
+    return correct, subjects, tests
 
 def fraction_disc(results,N,overlap,fig,alpha=None,multiple_correction=False,n_replicates=None):
     """
@@ -653,7 +715,7 @@ def fraction_disc(results,N,overlap,fig,alpha=None,multiple_correction=False,n_r
     """
 
     assert fig in ['a','b']
-    correct = correct_matrix(results,N,overlap)
+    correct,_,_ = correct_matrix(results,N,overlap)
     if fig == 'a':
         dim = 1
     elif fig == 'b':
@@ -707,7 +769,7 @@ def fig2x(results,fig='b',plot=True):
     plt.subplots_adjust(wspace=0.4)
     #plt.show()
 
-def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None,plot=True):
+def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None,threshold=50.0,plot=True):
     """
     Given test results, a reference figure panel ('a' or 'b'), an optional 
     choice of significance threshold alpha, whether or not to do multiple comparisons
@@ -742,6 +804,11 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
         plt.scatter(thirties_overlap,thirties,s=40,c='g',marker='s')
         plt.xlim(101,-1)
         plt.ylim(-1,101)
+        for name,x,y in [('tens',tens_overlap,tens),
+                         ('twenties',twenties_overlap,twenties),
+                         ('thirties',thirties_overlap,thirties)]:
+            np.savetxt("fig3%s_%s.csv" % (fig,name), 
+                       np.array((x,y)).transpose(), delimiter=",")
     overlap = np.concatenate((tens_overlap,twenties_overlap,thirties_overlap))
     percent_disc = np.concatenate((tens,twenties,thirties))
 
@@ -760,16 +827,16 @@ def fig3x(results,fig='a',alpha=0.05,multiple_correction=False,n_replicates=None
     if w[0] == 0.0 and w[1] == 0.0:
         overlap = 0.0
     else:
-        overlap = (50.0 - w[0])/w[1]
-    print_(('50%% discrimination at %.3g%% overlap for alpha = '+('%g' if alpha else '%s')) \
-        % (overlap,alpha))
+        overlap = (threshold - w[0])/w[1]
+    print_(('%f%% discrimination at %.3g%% overlap for alpha = '+('%g' if alpha else '%s')) \
+        % (threshold,overlap,alpha))
     if overlap > 100.0:
         overlap = 100.0
     if overlap < 0.0:
         overlap = 0.0
     if plot:
-        plt.plot([100,0],[50,50],'k--')
-        plt.plot([overlap,overlap],[0,50],'k:')
+        plt.plot([100,0],[threshold,threshold],'k--')
+        plt.plot([overlap,overlap],[0,threshold],'k:')
     return overlap
 
 def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
@@ -799,7 +866,7 @@ def overlap(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_c
     plt.xlabel(r'Significance criterion $\alpha$')
     plt.ylabel('%% overlap for 50% discrimination')
 
-def num_odors_vs_alpha(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25),multiple_correction=False):
+def num_odors_vs_alpha(results,fig='a',alphas=ALPHAS,multiple_correction=False,N=30,y_scale=True):
     """
     Given test results, a reference figure panel ('a' or 'b'), a range of 
     significance thresholds alpha, and whether or not to do multiple comparisons
@@ -808,7 +875,6 @@ def num_odors_vs_alpha(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25)
     Uses the intermediate N = 20 case for convenience.  
     """
 
-    N = 20
     n_odors_list = []
     for alpha in alphas:
         overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction=multiple_correction,plot=False)
@@ -823,14 +889,14 @@ def num_odors_vs_alpha(results,fig='a',alphas=0.05*10.0**np.arange(-2,0.25,0.25)
     
     plt.scatter(alphas,n_odors_list,s=40,c=color)
     plt.xlim(0.1,np.min(alphas)*0.5)
-    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
+    plt.ylim(1000,1e18)
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel(r'Significance criterion $\alpha$')
-    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
-    return (alphas,n_odors_list)
+    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{z}$')
+    return np.vstack((np.array(alphas),np.array(n_odors_list)))
 
-def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST):
+def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST,N=30,plot=True):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     new numbers of replicates (subjects or tests), plots the number of odors 
@@ -840,33 +906,33 @@ def num_odors_vs_replicates(results,fig='a',n_replicates_list=N_REPLICATES_LIST)
     because that correction was not evident in Bushdid et al.  
     """
 
-    N = 30
     n_odors_list = []
     for n_replicates in n_replicates_list:
-        overlap = fig3x(results,fig=fig,alpha=0.05,multiple_correction=None,n_replicates=n_replicates,plot=False)
+        overlap = fig3x(results,fig=fig,alpha=(0.05 if fig=='a' else 0.025),multiple_correction=None,n_replicates=n_replicates,plot=False)
         overlap = np.min([overlap,100])
         n_odors = float(disc(N,128,N*(100-overlap)/100))
         print_(n_replicates,overlap,n_odors)
         n_odors_list.append(n_odors)
     
-    if fig == 'a':
-        color ='b'
-    else:
-        color ='g'
+    if plot:
+        if fig == 'a':
+            color ='b'
+        else:
+            color ='g'
     
-    plt.scatter(n_replicates_list,n_odors_list,s=40,c=color)
-    plt.xlim(np.min(n_replicates_list)*0.5,np.max(n_replicates_list)*2)
-    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
-    plt.xscale('log')
-    plt.yscale('log')
-    if fig == 'a':
-        plt.xlabel('Number of subjects')
-    elif fig=='b':
-        plt.xlabel('Number of tests')
-    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
+        plt.scatter(n_replicates_list,n_odors_list,s=40,c=color)
+        plt.xlim(np.min(n_replicates_list)*0.5,np.max(n_replicates_list)*2)
+        plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
+        plt.xscale('log')
+        plt.yscale('log')
+        if fig == 'a':
+            plt.xlabel('Number of tests')
+        elif fig=='b':
+            plt.xlabel('Number of subjects')
+        plt.ylabel(r'Estimated number of discriminable stimuli $\hat{z}$')
     return (n_replicates_list,n_odors_list)
 
-def num_odors_vs_C(results,fig='a',Cs=C_LIST):
+def num_odors_vs_C(results,fig='a',Cs=C_LIST,plot=True):
     """
     Given test results, a reference figure panel ('a' or 'b'), and an array of 
     component library sizes (the value C in Bushdid et al), plots the number of 
@@ -884,25 +950,27 @@ def num_odors_vs_C(results,fig='a',Cs=C_LIST):
         print_(C,overlap,n_odors)
         n_odors_list.append(n_odors)
     
-    if fig == 'a':
-        color ='b'
-    else:
-        color ='g'
-    
-    plt.scatter(Cs,n_odors_list,s=40,c=color)
-    plt.xlim(np.min(Cs)*0.5,np.max(Cs)*2)
-    plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.xlabel("Number of components (C) \n in the molecular library")
-    plt.ylabel(r'Estimated number of discriminable stimuli $\hat{O}$')
+    if plot:
+        if fig == 'a':
+            color ='b'
+        else:
+            color ='g'
+        
+        plt.scatter(Cs,n_odors_list,s=40,c=color)
+        plt.xlim(np.min(Cs)*0.5,np.max(Cs)*2)
+        plt.ylim(np.min(n_odors_list)*0.1,np.max(n_odors_list)*10)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel("Number of components (C) \n in the molecular library")
+        plt.ylabel(r'Estimated number of discriminable stimuli $\hat{z}$')
     return (Cs,n_odors_list)
 
 def num_odors_vs_replicates_and_C(results,
                fig='a',
                alpha=0.05,
                n_replicates_list=N_REPLICATES_LIST,
-               Cs=C_LIST):
+               Cs=C_LIST,
+               multiple_correction=None):
     """
     Given test results, a reference figure panel ('a' or 'b'), an array of 
     new numbers of replicates (subjects or tests), and an array of 
@@ -917,7 +985,8 @@ def num_odors_vs_replicates_and_C(results,
     N = 20
     n_odors_array = np.zeros((len(n_replicates_list),len(Cs)))
     for i,n_replicates in enumerate(n_replicates_list):
-        overlap = fig3x(results,fig=fig,alpha=alpha,n_replicates=n_replicates,multiple_correction='fdr',plot=False)
+        overlap = fig3x(results,fig=fig,alpha=alpha,n_replicates=n_replicates,
+                        multiple_correction=multiple_correction,plot=False)
         for j,C in enumerate(Cs):
             n_odors = float(disc(N,C,N*(100-overlap)/100))
             print_(C,n_replicates,overlap,n_odors)
@@ -930,7 +999,8 @@ def num_odors_vs_replicates_and_C(results,
 def num_odors_vs_alpha_and_C(results,
                fig='a',
                alphas=ALPHAS,
-               Cs=C_LIST):
+               Cs=C_LIST,
+               multiple_correction=None):
     """
     Given test results, a reference figure panel ('a' or 'b'), an array of 
     alphas, and an array of component library sizes (the value C in Bushdid 
@@ -944,7 +1014,8 @@ def num_odors_vs_alpha_and_C(results,
     N = 20
     n_odors_array = np.zeros((len(alphas),len(Cs)))
     for i,alpha in enumerate(alphas):
-        overlap = fig3x(results,fig=fig,alpha=alpha,multiple_correction='fdr',plot=False)
+        overlap = fig3x(results,fig=fig,alpha=alpha,
+                        multiple_correction=multiple_correction,plot=False)
         for j,C in enumerate(Cs):
             n_odors = float(disc(N,C,N*(100-overlap)/100))
             print_(C,alpha,overlap,n_odors)
@@ -957,7 +1028,9 @@ def num_odors_vs_alpha_and_C(results,
 def num_odors_vs_alpha_and_replicates(results,
                fig='a',
                alphas=ALPHAS,
-               n_replicates_list=N_REPLICATES_LIST):
+               n_replicates_list=N_REPLICATES_LIST,
+               N=30,
+               multiple_correction=None):
     """
     Given test results, a reference figure panel ('a' or 'b'), an array of 
     alphas, and an array of new numbers of replicates (subjects or tests), 
@@ -969,11 +1042,12 @@ def num_odors_vs_alpha_and_replicates(results,
     alphas = np.round(alphas,5)
     n_replicates_list = np.rint(n_replicates_list).astype(int)
     
-    N = 20
     n_odors_array = np.zeros((len(alphas),len(n_replicates_list)))
     for i,alpha in enumerate(alphas):
         for j,n_replicates in enumerate(n_replicates_list):
-            overlap = fig3x(results,fig=fig,alpha=alpha,n_replicates=n_replicates,multiple_correction='fdr',plot=False)
+            overlap = fig3x(results,fig=fig,alpha=alpha,
+                            n_replicates=n_replicates,
+                            multiple_correction=multiple_correction,plot=False)
             n_odors = float(disc(N,128,N*(100-overlap)/100))
             print_(alpha,n_replicates,overlap,n_odors)
             if np.isnan(n_odors):
@@ -981,6 +1055,49 @@ def num_odors_vs_alpha_and_replicates(results,
             n_odors_array[i,j] = n_odors
     
     return (alphas,n_replicates_list,n_odors_array)
+
+def make_urns(stimuli,discriminable,urns=None):
+    """
+    A list of stimuli and a function 'discriminable' for determining if a pair 
+    of those stimuli is discriminable
+    """
+    
+    # Sort stimuli randomly.
+    randos = np.random.random(len(stimuli))
+    stimuli = [x for (y,x) in sorted(zip(randos,stimuli))]  
+
+    # Initialize first urn with first stimulus.  
+    # Then iterate through stimuli assigning to urns.  
+    if urns is None:
+        recurse = True
+        urns = [[stimuli[0]]]
+    else:
+        recurse = False
+    for i,stimulus in enumerate(stimuli[1:]):
+        new_urn = 1
+        for urn in urns:
+            same = 0
+            diff = 0
+            if stimulus in urn:
+                new_urn = 0
+                break
+            for other_stimulus in urn:
+                if not discriminable(stimulus,other_stimulus):
+                    same += 1
+                else:
+                    diff += 1
+            if diff < same:
+                urn.append(stimulus)
+                new_urn = 0
+                break
+        if new_urn:
+            urns.append([stimulus])
+    if recurse:
+        for size in range(1,5):
+            recheck = [i for urn in urns for i in urn if len(urn)==size]
+            keep = [urn for urn in urns if len(urn)>size]
+            urns = make_urns(recheck,discriminable,urns=keep)
+    return urns
 
 def get_results():
     components = load_components()

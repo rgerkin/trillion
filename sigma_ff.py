@@ -3,6 +3,9 @@ sigma_ff_catalog.txt produced using pdf2txt.py found in PDFminer
 on sigma_ff_catalog.pdf.  
 """
 
+import platform
+platform.python_version()
+
 with open('sigma_ff_catalog.txt','r') as f:
      text = f.read()
      lines = text.split('\n')
@@ -13,8 +16,11 @@ for line_num,line in enumerate(lines):
     if len(line):
         if not organoleptic and line[0]=='[':
             key = line.split(']')[0][1:]
-            print key
-            key = key.decode('utf-8').replace(u'\u2011','-').encode('ascii')
+            #print(key)
+            if platform.python_version() > '3.0':
+                key = key.replace(u'\u2011','-')
+            else:
+                key = key.decode('utf-8').replace(u'\u2011','-').encode('ascii')
             organoleptic = 1
         if organoleptic and 'Organoleptic' in line:
             try:
@@ -31,11 +37,11 @@ for line_num,line in enumerate(lines):
             except:
                 pass
 
-print "%d compounds described." % len(data)
+print("%d compounds described." % len(data))
 
 descriptors = []
 for x in data.values():
      descriptors += x
 descriptors = list(set(descriptors)) # Remove duplicates.  
-print "%d descriptors used." % len(descriptors)
+print("%d descriptors used." % len(descriptors))
 

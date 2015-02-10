@@ -17,7 +17,7 @@ with open('dravnieks_descriptors.txt','r') as f:
 
 with open('dravnieks_data.txt','r') as f:
     text = f.read()
-    lines = text.split('\r')[:-1]
+    lines = text.split('\n')[:-1]
     data = {}
     for i,line in enumerate(lines):
         values = line.split('\t')
