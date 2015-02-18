@@ -1,4 +1,4 @@
-trillion
+Humans can discriminate trillions of olfactory stimuli, or more, or fewer
 ========
 
 Analysis of the data in "Humans can discriminate more than 1 trillion olfactory stimuli" [[1]](http://www.ncbi.nlm.nih.gov/pubmed/24653035).
