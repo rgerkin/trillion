@@ -848,7 +848,8 @@ def fig3x(results,fig='a',alpha=ALPHA,multiple_correction=False,n_replicates=Non
         plt.plot([overlap,overlap],[0,threshold],'k:')
     return overlap
 
-def fig4x(results,fig='c',alpha=ALPHA,gamma=2):
+def fig4x(results,fig='c',alpha=ALPHA,gamma=2,
+          axes=None,Ns=[10,20,30],xlabel=True,ylabel=True,lines=True):
     if fig=='c': # 4c corresponds to...  
         fig=='a' # ...3a.
     elif fig=='d': # 4d corresponds to... 
@@ -856,22 +857,32 @@ def fig4x(results,fig='c',alpha=ALPHA,gamma=2):
     alpha_ = alpha if fig=='a' else alpha/2
     n_replicates = N_TESTS if fig=='a' else N_SUBJECTS
     result = []
-    plt.figure()
+    if axes is None:
+        plt.figure()
+        axes = plt.gca()
     for color,N_ in [('blue',10),('magenta',20),('green',30)]:
+        if N_ not in Ns:
+            continue
         x = np.arange(0,N_+1)
         z = [disc(N_,C,_*2/gamma) for _ in x]
         O = 100*(1-x/N_) # Overlap, but expressed as a percent of N_.  
         D = fig3x(results,fig=fig,alpha=alpha_,plot=False)
         D_f = (100-D)/100 # Express as fraction distinct components.  
-        plt.plot(O,z,color=color,linewidth=2)
+        axes.plot(O,z,color=color,linewidth=2)
         #np.savetxt("z_vs_overlap_%s_%s.csv" % (disc.__name__,color), np.array((o,y)).transpose(), delimiter=",")
         z_ = disc(N_,C,N_*D_f*2/gamma)
-        plt.plot([0,D],[z_,z_],'k')
-        plt.plot([D,D],[1,z_],'k')
-        plt.yscale('log')
-        plt.xlabel("% mixture overlap \n allowing discrimination")
-        plt.ylabel(r'Estimated number of discriminable stimuli $\hat{z}$')
+        if lines:
+            axes.plot([0,D],[z_,z_],'k')
+            axes.plot([D,D],[1,z_],'k')
+        axes.set_yscale('log')
+        if xlabel:
+            axes.set_xlabel("% mixture overlap \n allowing discrimination",
+                            {'size':12})
+        if ylabel:
+            axes.set_ylabel('Estimated number of \n discriminable stimuli $\hat{z}$',
+                            {'size':12})
         result.append((N_,z_))
+        np.savetxt('%d_%d.dat' % (N_,gamma),np.vstack((np.array(O),np.array(z))).transpose())
     return result
 
 def overlap(results,fig='a',alphas=ALPHA*10.0**np.arange(-2,0.25,0.25),multiple_correction=False,n_replicates=None):
