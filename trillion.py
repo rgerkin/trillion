@@ -1,14 +1,19 @@
 import sys
-import numpy as np
-import matplotlib.pyplot as plt
-from itertools import combinations
-from scipy.misc import factorial
-from scipy.stats import binom
+import os
+import urllib
 import random
 import csv
+import json
+from itertools import combinations
 from datetime import datetime
 from collections import OrderedDict,Counter
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.misc import factorial
+from scipy.stats import binom
+
+HERE = os.path.dirname(__file__)
 VERBOSE = False
 
 DILUTION = {'1/4':0.25, '1/2':0.5, 'not diluted':1.0}
@@ -339,6 +344,23 @@ class Odorant(object):
 
         return self.n_described_components(source) / self.N
 
+    def matrix(self,features):
+        matrix = np.vstack([component.vector(features) \
+                            for component in self.components \
+                            if component.cid in features])
+        if matrix.shape[0] != self.N:
+            print('Odorant has %d components but only %d vectors were computed' % \
+                  (self.N,matrix.shape[0]))
+        return matrix
+
+    def vector(self,features,method='sum'):
+        matrix = self.matrix(features)
+        if method == 'sum':
+            vector = matrix.sum(axis=0)
+        else:
+            vector = None
+        return vector
+
     def __str__(self):
         """
         String representation of the odorant.
@@ -361,9 +383,30 @@ class Component(object):
         self.id = component_id
         self.name = name
         self.cas = cas
+        self.cid_ = None
         self.percent = percent
         self.solvent = solvent
-        self.descriptors = {} # An empty dictionary.  
+        self.descriptors = {} # An empty dictionary. 
+
+    @property
+    def cid(self):
+        if self.cid_:
+            cid = self.cid_
+        else: 
+            url_template = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/%s/cids/JSON"
+            for query in self.cas,self.name:
+                try:
+                    url = url_template % query
+                    page = urllib.request.urlopen(url)
+                    string = page.read().decode('utf-8')
+                    json_data = json.loads(string)
+                    cid = json_data['IdentifierList']['CID'][0]
+                except urllib.error.HTTPError as e:
+                    print(query)
+                else:
+                    break
+            self.cid_ = cid
+        return cid
 
     def set_descriptors(self,source,cas_descriptors):
         """
@@ -376,6 +419,13 @@ class Component(object):
             self.descriptors[source] = cas_descriptors[self.cas]
             # For sigma_ff this will be a list.  
             # For dravnieks this will be a dict.  
+
+    def vector(self,features):
+        if self.cid in features:
+            result = np.array(list(features[self.cid].values()))
+        else:
+            result = None
+        return result
 
     def __str__(self):
         return self.name
@@ -546,6 +596,21 @@ class Test(object):
         s = self.single.n_described_components(source)
         return (self.N-d,self.N-s)
 
+    def angle(self,features,method='sum'):
+        def length(v):
+            return np.sqrt(np.dot(v, v))
+        v1 = self.single.vector(features,method=method)
+        v2 = self.double.vector(features,method=method)
+        return np.arccos(np.dot(v1, v2) / (length(v1) * length(v2)))
+
+    def fraction_correct(self,results):
+        num,denom = 0.0,0.0
+        for result in results:
+            if result.test.id == self.id:
+                num += result.correct
+                denom += 1
+        return num/denom
+
 class Result(object):
     """
     A test result, corresponding to one test given to one subject.
@@ -579,7 +644,7 @@ def load_components():
     """
 
     components = []
-    f = open('Bushdid-tableS1.csv','r',encoding='latin1')
+    f = open(os.path.join(HERE,'Bushdid-tableS1.csv'),'r',encoding='latin1')
     reader = csv.reader(f)
     next(reader)
     component_id = 0
@@ -601,7 +666,7 @@ def load_odorants_tests_results(all_components):
     odorants = {}
     tests = {}
     results = []
-    f = open('Bushdid-tableS2.csv','r',encoding='latin1')
+    f = open(os.path.join(HERE,'Bushdid-tableS2.csv'),'r',encoding='latin1')
     reader = csv.reader(f)
     next(reader)
     row_num = 0
@@ -775,6 +840,7 @@ def fig2x(results,fig='b',plot=True):
     axarr[1].set_xlabel("% mixture overlap")
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.4)
+    plt.savefig('fig2%s.eps' % fig)
     #plt.show()
 
 def fig3x(results,fig='a',alpha=ALPHA,multiple_correction=False,n_replicates=None,threshold=50.0,plot=True):
