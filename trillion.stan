@@ -21,22 +21,16 @@ data {
 parameters {
     vector<lower=0>[n_subjects] kd; // Subject kd's
     vector<lower=0>[n_subjects] exponent; // Subject exponents
-    //vector<lower=0,upper=1>[n_subjects] p_dumb; // Subject dumbness probabilties
     matrix<lower=0,upper=1>[n_dimensions,n_molecules] molecule_coords;
-    //int<lower=0,upper=1> molecule_bools[n_dimensions,n_molecules];
     
     real<lower=0> mu_kd;
-    //real<lower=0> beta_dumb;
     real<lower=0> mu_exponent;
-    //real<lower=0> molecule_alpha;
-    //real<lower=0> molecule_beta;
     }
     
 transformed parameters {
     vector<lower=0>[n_dimensions] mixture1_coords[n_tests];
     vector<lower=0>[n_dimensions] mixture2_coords[n_tests];
     real<lower=0> D[n_tests];
-    real logp;
     
     for(i in 1:n_tests) {
         mixture1_coords[i] <- molecule_coords * mixtures1[i]; // compute mixture 1 coordinates
@@ -51,41 +45,22 @@ transformed parameters {
                 }
             }
         }
-    logp <- get_lp();    
     }
 
 model {
     int s;
     int t;
     
-    mu_kd ~ lognormal(0,100);
-    mu_exponent ~ lognormal(0,100);
-    //beta_dumb ~ uniform(1,100);
-    //p_dim ~ beta(1,100);
+    //mu_kd ~ lognormal(0,1000);
+    //mu_exponent ~ lognormal(0,1000);
     
     kd ~ lognormal(mu_kd,1.0);
     exponent ~ lognormal(mu_exponent,0.1);
-    //p_dumb ~ beta(1,beta_dumb);
-
+    
     for(dim in 1:n_dimensions) {
-        molecule_coords[dim] ~ uniform(0,1);//exponential(molecule_alpha);//,molecule_beta);
-        //molecule_coords[dim] ~ beta(molecule_alpha,molecule_beta);
-    }
-    /*
-    for(mol in 1:n_molecules) {
-        for(dim in 1:n_dimensions) {
-            if(molecule_coords[dim,mol] == 0) {
-                increment_log_prob(bernoulli_log(0,p_dim) +
-                                   uniform_log(0,0,1));
-                }
-            else {
-                increment_log_prob(bernoulli_log(1,p_dim) +
-                                   uniform_log(molecule_coords[dim,mol],0,1));
-                }
-            }
+        molecule_coords[dim] ~ uniform(0,1);
         }
-    */
-
+    
     for(i in 1:n_obs) {
         s <- subjects[i];
         t <- tests[i];

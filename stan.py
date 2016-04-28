@@ -128,20 +128,20 @@ def make_data(search_data=None,test_size=0):
     
     mixtures1 = np.zeros((n_tests,n_molecules))
     mixtures2 = np.zeros((n_tests,n_molecules))
-    for test_id in tests:
+    for test_id,test in tests.items():
         single = [components.index(molecule) for molecule in tests[test_id].single.components]
         for molecule in single:
-            mixtures1[test_id-1,molecule] = 1
+            mixtures1[test_id-1,molecule] = 1.0/test.N
         double = [components.index(molecule) for molecule in tests[test_id].double.components]
         for molecule in double:
-            mixtures2[test_id-1,molecule] = 1
+            mixtures2[test_id-1,molecule] = 1.0/test.N
     tests = np.array([result.test.id for result in results])
     subjects = np.array([result.subject_id for result in results])
     correct = np.array([int(result.correct) for result in results])
     
     data = locals()
     for to_del in ['components','odorants','results','single','double',
-                   'test_id','molecule']:
+                   'test_id','test','molecule']:
         del data[to_del]
     if 'search_data' in data:
         del data['search_data']
