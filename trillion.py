@@ -344,17 +344,17 @@ class Odorant(object):
 
         return self.n_described_components(source) / self.N
 
-    def matrix(self,features):
-        matrix = np.vstack([component.vector(features) \
+    def matrix(self,features,weights=None):
+        matrix = np.vstack([component.vector(features,weights=weights) \
                             for component in self.components \
                             if component.cid in features])
-        if matrix.shape[0] != self.N:
+        if 0:#matrix.shape[0] != self.N:
             print('Odorant has %d components but only %d vectors were computed' % \
                   (self.N,matrix.shape[0]))
         return matrix
 
-    def vector(self,features,method='sum'):
-        matrix = self.matrix(features)
+    def vector(self,features,weights=None,method='sum'):
+        matrix = self.matrix(features,weights=weights)
         if method == 'sum':
             vector = matrix.sum(axis=0)
         else:
@@ -420,9 +420,12 @@ class Component(object):
             # For sigma_ff this will be a list.  
             # For dravnieks this will be a dict.  
 
-    def vector(self,features):
+    def vector(self,features,weights=None):
         if self.cid in features:
-            result = np.array(list(features[self.cid].values()))
+            feature_values = np.array(list(features[self.cid].values()))
+            if weights is None:
+                weights = np.ones(feature_values.shape)
+            result = feature_values * weights
         else:
             result = None
         return result
@@ -596,12 +599,52 @@ class Test(object):
         s = self.single.n_described_components(source)
         return (self.N-d,self.N-s)
 
-    def angle(self,features,method='sum'):
-        def length(v):
-            return np.sqrt(np.dot(v, v))
-        v1 = self.single.vector(features,method=method)
-        v2 = self.double.vector(features,method=method)
-        return np.arccos(np.dot(v1, v2) / (length(v1) * length(v2)))
+    @classmethod
+    def length(cls,v):
+        return np.sqrt(np.dot(v, v))
+    
+    @classmethod
+    def find_angle(cls,v1,v2):
+        return np.arccos(np.dot(v1, v2) / (cls.length(v1) * cls.length(v2)))
+    
+    @classmethod
+    def circmean(cls,angles):
+        return np.arctan2(np.mean(np.sin(angles)),np.mean(np.cos(angles)))
+
+    def angle(self,features,weights=None,method='sum',method_param=1.0):
+        if method == 'sum':
+            v1 = self.single.vector(features,weights=weights,method=method)
+            v2 = self.double.vector(features,weights=weights,method=method)
+            angle = self.find_angle(v1,v2)
+        elif method == 'nn': # Nearest-Neighbor.  
+            m1 = self.single.matrix(features,weights=weights)
+            m2 = self.double.matrix(features,weights=weights)
+            angles = []
+            for i in range(m1.shape[0]):
+                angles_i = []
+                for j in range(m2.shape[0]):
+                    one_angle = self.find_angle(m1[i,:],m2[j,:])
+                    if np.isnan(one_angle):
+                        one_angle = 1.0 
+                    angles_i.append(one_angle)
+                angles_i = np.array(sorted(angles_i))
+                from scipy.stats import geom
+                weights_i = geom.pmf(range(1,len(angles_i)+1),method_param)
+                angles.append(np.dot(angles_i,weights_i))
+            angle = np.abs(angles).mean()#circmean(angles)
+        return angle
+
+    def norm(self,features,order=1,weights=None,method='sum'):
+        v1 = self.single.vector(features,weights=weights,method=method)
+        v2 = self.double.vector(features,weights=weights,method=method)
+        dv = v1-v2
+        dv = np.abs(dv)**order
+        return np.sum(dv)
+
+    def distance(self,features,weights=None,method='sum'):
+        v1 = self.single.vector(features,weights=weights,method=method)
+        v2 = self.double.vector(features,weights=weights,method=method)
+        return np.sqrt(((v1-v2)**2).sum())
 
     def fraction_correct(self,results):
         num,denom = 0.0,0.0
